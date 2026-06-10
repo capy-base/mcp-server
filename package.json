@@ -1,0 +1,51 @@
+{
+  "name": "@capydb/mcp",
+  "version": "0.1.0",
+  "description": "Official CapyDB MCP server — managed Postgres projects, preview databases, backups, restores, and SQL for AI agents.",
+  "keywords": [
+    "capydb",
+    "postgres",
+    "database",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents"
+  ],
+  "homepage": "https://capydb.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/capy-base/capydb-mcp"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "capydb-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsgo --noEmit",
+    "lint": "oxlint src",
+    "format": "oxfmt --write src",
+    "prepublishOnly": "pnpm typecheck && pnpm build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "@typescript/native-preview": "latest",
+    "oxfmt": "0.54.0",
+    "oxlint": "1.69.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
