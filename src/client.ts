@@ -8,8 +8,10 @@
 
 import type {
   Backup,
+  Cluster,
   ConnectionInfo,
   CreatePreviewRequest,
+  CreateProjectRequest,
   CreateRestoreRequest,
   DatabaseTable,
   ImportPreflightResult,
@@ -36,8 +38,11 @@ export class CapyDBApiError extends Error {
 }
 
 export interface CapyDBClientOptions {
-  /** Organization API key (`capy_...`). Project-scoped keys are recommended. */
-  apiKey: string;
+  /**
+   * Returns the API key (`capy_...`) for each request. Resolved lazily so the
+   * key can arrive after startup via the first-run device login.
+   */
+  getApiKey: () => string;
   /** Control plane base URL. Defaults to the hosted bridge. */
   baseUrl?: string;
 }
@@ -48,11 +53,11 @@ interface RequestOptions {
 }
 
 export class CapyDBClient {
-  private readonly apiKey: string;
+  private readonly getApiKey: () => string;
   private readonly baseUrl: string;
 
   constructor(options: CapyDBClientOptions) {
-    this.apiKey = options.apiKey;
+    this.getApiKey = options.getApiKey;
     this.baseUrl = (options.baseUrl ?? DEFAULT_API_URL).replace(/\/+$/, "");
   }
 
@@ -67,7 +72,7 @@ export class CapyDBClient {
       response = await fetch(url, {
         method,
         headers: {
-          authorization: `Bearer ${this.apiKey}`,
+          authorization: `Bearer ${this.getApiKey()}`,
           accept: "application/json",
           ...(options.body !== undefined ? { "content-type": "application/json" } : {}),
         },
@@ -91,7 +96,18 @@ export class CapyDBClient {
     }
   }
 
+  // ---- Clusters --------------------------------------------------------------
+
+  async listClusters(): Promise<Cluster[]> {
+    const data = await this.request<{ clusters: Cluster[] | null }>("GET", "/v1/clusters");
+    return data.clusters ?? [];
+  }
+
   // ---- Projects ------------------------------------------------------------
+
+  async createProject(body: CreateProjectRequest): Promise<{ project: Project; job: Job }> {
+    return await this.request("POST", "/v1/projects", { body });
+  }
 
   async listProjects(organizationId?: string): Promise<Project[]> {
     const data = await this.request<{ projects: Project[] | null }>("GET", "/v1/projects", {

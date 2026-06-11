@@ -13,7 +13,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import { sleep, type AuthManager } from "./auth.js";
 import { CapyDBApiError, type CapyDBClient } from "./client.js";
+import type { Job, Project } from "./types.js";
+
+const PROVISION_POLL_INTERVAL_MS = 3_000;
+const PROVISION_TIMEOUT_MS = 5 * 60_000;
+const BILLING_URL = "https://capydb.dev/dashboard/settings?tab=billing";
 
 function jsonResult(value: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
@@ -29,16 +35,91 @@ function errorResult(error: unknown): CallToolResult {
   return { isError: true, content: [{ type: "text", text: message }] };
 }
 
-async function run(handler: () => Promise<unknown>): Promise<CallToolResult> {
+/**
+ * Gates every tool on authentication before running its handler. When no API
+ * key is available, the result text carries the device-login approval URL so
+ * the host model relays it to the user.
+ */
+async function run(auth: AuthManager, handler: () => Promise<unknown>): Promise<CallToolResult> {
   try {
+    const authState = await auth.ensure();
+    if (!authState.ok) {
+      return { isError: true, content: [{ type: "text", text: authState.message }] };
+    }
     return jsonResult(await handler());
   } catch (error) {
     return errorResult(error);
   }
 }
 
-export function registerTools(server: McpServer, client: CapyDBClient): void {
+export function registerTools(server: McpServer, client: CapyDBClient, auth: AuthManager): void {
+  // ---- Clusters --------------------------------------------------------------
+
+  server.registerTool(
+    "list_clusters",
+    {
+      title: "List clusters",
+      description:
+        "List the active CapyDB clusters (regions) projects can be created on, including Postgres version, installed extensions, and database-count capacity. Use this to pick a region or cluster_id for create_project.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => run(auth, () => client.listClusters()),
+  );
+
   // ---- Projects ------------------------------------------------------------
+
+  server.registerTool(
+    "create_project",
+    {
+      title: "Create a project",
+      description:
+        "Create a new CapyDB Postgres project. Provisioning is asynchronous; this tool waits up to 5 minutes for the provision job to finish and returns the final project and job state. The project's plan is derived from the organization's billing state and cannot be chosen here. Omit cluster_id and region to let CapyDB pick (use list_clusters to see what is available).",
+      inputSchema: {
+        name: z.string().describe("Project name."),
+        region: z
+          .string()
+          .optional()
+          .describe("Region to place the project in (see list_clusters). Omit to let CapyDB pick."),
+        cluster_id: z
+          .string()
+          .optional()
+          .describe("Specific cluster to place the project on. Omit to let CapyDB pick by region."),
+        slug: z.string().optional().describe("URL-safe slug; derived from the name when omitted."),
+      },
+    },
+    async ({ name, region, cluster_id, slug }) =>
+      run(auth, async () => {
+        let created: { project: Project; job: Job };
+        try {
+          created = await client.createProject({ name, region, cluster_id, slug });
+        } catch (error) {
+          if (error instanceof CapyDBApiError && error.status === 412) {
+            throw new Error(
+              `No active plan. Ask the user to pick a plan (1 month free) at ${BILLING_URL} — then retry this tool.`,
+            );
+          }
+          throw error;
+        }
+
+        let job = created.job;
+        const deadline = Date.now() + PROVISION_TIMEOUT_MS;
+        while (job.state !== "completed" && job.state !== "failed" && Date.now() < deadline) {
+          await sleep(PROVISION_POLL_INTERVAL_MS);
+          job = await client.getJob(job.id);
+        }
+
+        const project = await client.getProject(created.project.id);
+        if (job.state !== "completed" && job.state !== "failed") {
+          return {
+            project,
+            job,
+            note: "Provisioning is still running after 5 minutes — poll with get_job until it completes.",
+          };
+        }
+        return { project, job };
+      }),
+  );
 
   server.registerTool(
     "list_projects",
@@ -49,7 +130,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
-    async () => run(() => client.listProjects()),
+    async () => run(auth, () => client.listProjects()),
   );
 
   server.registerTool(
@@ -62,7 +143,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ project_id }) => run(() => client.getProject(project_id)),
+    async ({ project_id }) => run(auth, () => client.getProject(project_id)),
   );
 
   server.registerTool(
@@ -77,7 +158,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ project_id }) => run(() => client.getProjectConnections(project_id)),
+    async ({ project_id }) => run(auth, () => client.getProjectConnections(project_id)),
   );
 
   // ---- Preview databases ---------------------------------------------------
@@ -104,7 +185,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
     },
     async ({ project_id, name, mode, ttl_hours }) =>
-      run(() => client.createPreviewDatabase(project_id, { name, mode, ttl_hours })),
+      run(auth, () => client.createPreviewDatabase(project_id, { name, mode, ttl_hours })),
   );
 
   server.registerTool(
@@ -117,7 +198,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ project_id }) => run(() => client.listPreviewDatabases(project_id)),
+    async ({ project_id }) => run(auth, () => client.listPreviewDatabases(project_id)),
   );
 
   server.registerTool(
@@ -131,7 +212,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { destructiveHint: true, idempotentHint: true },
     },
-    async ({ preview_id }) => run(() => client.deletePreviewDatabase(preview_id)),
+    async ({ preview_id }) => run(auth, () => client.deletePreviewDatabase(preview_id)),
   );
 
   server.registerTool(
@@ -146,7 +227,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ preview_id }) => run(() => client.getPreviewConnections(preview_id)),
+    async ({ preview_id }) => run(auth, () => client.getPreviewConnections(preview_id)),
   );
 
   // ---- Backups, restores, imports -------------------------------------------
@@ -162,7 +243,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
         label: z.string().optional().describe("Optional human-readable label for the backup."),
       },
     },
-    async ({ project_id, label }) => run(() => client.createBackup(project_id, label)),
+    async ({ project_id, label }) => run(auth, () => client.createBackup(project_id, label)),
   );
 
   server.registerTool(
@@ -175,7 +256,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ project_id }) => run(() => client.listBackups(project_id)),
+    async ({ project_id }) => run(auth, () => client.listBackups(project_id)),
   );
 
   server.registerTool(
@@ -243,7 +324,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
           ),
         );
       }
-      return run(() =>
+      return run(auth, () =>
         client.createRestore(project_id, {
           backup_key: backup_key ?? "",
           restore_point_id,
@@ -276,7 +357,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ project_id, source_url }) =>
-      run(() => client.runImportPreflight(project_id, source_url)),
+      run(auth, () => client.runImportPreflight(project_id, source_url)),
   );
 
   // ---- Studio (SQL + data browser) ------------------------------------------
@@ -300,7 +381,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
     },
     async ({ project_id, query, max_rows }) =>
-      run(() => client.runSql(project_id, { query, max_rows })),
+      run(auth, () => client.runSql(project_id, { query, max_rows })),
   );
 
   server.registerTool(
@@ -313,7 +394,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ project_id }) => run(() => client.listTables(project_id)),
+    async ({ project_id }) => run(auth, () => client.listTables(project_id)),
   );
 
   server.registerTool(
@@ -330,7 +411,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       annotations: { readOnlyHint: true },
     },
     async ({ project_id, schema, table, limit }) =>
-      run(() => client.getTableRows(project_id, schema, table, limit)),
+      run(auth, () => client.getTableRows(project_id, schema, table, limit)),
   );
 
   // ---- Observability + jobs --------------------------------------------------
@@ -346,7 +427,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ project_id }) => run(() => client.getObservability(project_id)),
+    async ({ project_id }) => run(auth, () => client.getObservability(project_id)),
   );
 
   server.registerTool(
@@ -360,7 +441,7 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ job_id }) => run(() => client.getJob(job_id)),
+    async ({ job_id }) => run(auth, () => client.getJob(job_id)),
   );
 
   server.registerTool(
@@ -379,6 +460,6 @@ export function registerTools(server: McpServer, client: CapyDBClient): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ project_id, limit }) => run(() => client.listJobs(project_id, limit)),
+    async ({ project_id, limit }) => run(auth, () => client.listJobs(project_id, limit)),
   );
 }
