@@ -53,18 +53,18 @@ async function run(auth: AuthManager, handler: () => Promise<unknown>): Promise<
 }
 
 export function registerTools(server: McpServer, client: CapyDBClient, auth: AuthManager): void {
-  // ---- Clusters --------------------------------------------------------------
+  // ---- Regions ---------------------------------------------------------------
 
   server.registerTool(
-    "list_clusters",
+    "list_regions",
     {
-      title: "List clusters",
+      title: "List regions",
       description:
-        "List the active CapyDB clusters (regions) projects can be created on, including Postgres version, installed extensions, and database-count capacity. Use this to pick a region or cluster_id for create_project.",
+        "List the regions a CapyDB Postgres project can be placed in. Use this to pick a region for create_project; omit the region to let CapyDB choose.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
-    async () => run(auth, () => client.listClusters()),
+    async () => run(auth, () => client.listRegions()),
   );
 
   // ---- Projects ------------------------------------------------------------
@@ -74,25 +74,21 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Create a project",
       description:
-        "Create a new CapyDB Postgres project. Provisioning is asynchronous; this tool waits up to 5 minutes for the provision job to finish and returns the final project and job state. The project's plan is derived from the organization's billing state and cannot be chosen here. Omit cluster_id and region to let CapyDB pick (use list_clusters to see what is available).",
+        "Create a new CapyDB Postgres project. Provisioning is asynchronous; this tool waits up to 5 minutes for the provision job to finish and returns the final project and job state. The project's plan is derived from the organization's billing state and cannot be chosen here. Omit the region to let CapyDB pick (use list_regions to see what is available).",
       inputSchema: {
         name: z.string().describe("Project name."),
         region: z
           .string()
           .optional()
-          .describe("Region to place the project in (see list_clusters). Omit to let CapyDB pick."),
-        cluster_id: z
-          .string()
-          .optional()
-          .describe("Specific cluster to place the project on. Omit to let CapyDB pick by region."),
+          .describe("Region to place the project in (see list_regions). Omit to let CapyDB pick."),
         slug: z.string().optional().describe("URL-safe slug; derived from the name when omitted."),
       },
     },
-    async ({ name, region, cluster_id, slug }) =>
+    async ({ name, region, slug }) =>
       run(auth, async () => {
         let created: { project: Project; job: Job };
         try {
-          created = await client.createProject({ name, region, cluster_id, slug });
+          created = await client.createProject({ name, region, slug });
         } catch (error) {
           if (error instanceof CapyDBApiError && error.status === 412) {
             throw new Error(

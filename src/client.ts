@@ -8,7 +8,6 @@
 
 import type {
   Backup,
-  Cluster,
   ConnectionInfo,
   CreatePreviewRequest,
   CreateProjectRequest,
@@ -19,6 +18,7 @@ import type {
   PreviewDatabase,
   Project,
   ProjectObservability,
+  RegionsResponse,
   SQLQueryRequest,
   SQLQueryResult,
   TableRowsResult,
@@ -96,11 +96,11 @@ export class CapyDBClient {
     }
   }
 
-  // ---- Clusters --------------------------------------------------------------
+  // ---- Regions ---------------------------------------------------------------
 
-  async listClusters(): Promise<Cluster[]> {
-    const data = await this.request<{ clusters: Cluster[] | null }>("GET", "/v1/clusters");
-    return data.clusters ?? [];
+  async listRegions(): Promise<string[]> {
+    const data = await this.request<RegionsResponse>("GET", "/v1/regions");
+    return data.regions ?? [];
   }
 
   // ---- Projects ------------------------------------------------------------

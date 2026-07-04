@@ -6,28 +6,9 @@
  * tools is typed here.
  */
 
-export interface Cluster {
-  id: string;
-  name: string;
-  provider: string;
-  region: string;
-  state: string;
-  postgres_version: string;
-  /** Postgres extensions installed on the cluster host. */
-  extensions: string[];
-  public_host: string;
-  pooled_port: number;
-  direct_port: number;
-  /** Database-count capacity budget for the cluster. */
-  max_databases: number;
-  backup_storage_mode: string;
-  supports_point_in_time_recovery: boolean;
-  health_alert_state: "ok" | "warning" | "critical";
-  last_replication_lag_seconds?: number;
-  last_replication_in_recovery?: boolean;
-  last_replication_sampled_at?: string;
-  last_replication_error?: string;
-  created_at: string;
+/** Response from `GET /v1/regions` — the regions a project can be placed in. */
+export interface RegionsResponse {
+  regions: string[];
 }
 
 export interface Project {
@@ -39,7 +20,7 @@ export interface Project {
   environment: string;
   plan: string;
   state: string;
-  cluster_id?: string;
+  primary_instance_id?: string;
   database_name?: string;
   role_name?: string;
   public_host?: string;
@@ -105,7 +86,8 @@ export interface Job {
   organization_id: string;
   project_id?: string;
   preview_database_id?: string;
-  cluster_id?: string;
+  host_id?: string;
+  instance_id?: string;
   type: string;
   state: "pending" | "running" | "completed" | "failed";
   attempts: number;
@@ -206,8 +188,6 @@ export interface CreateProjectRequest {
   slug?: string;
   /** Region to place the project in. Omit to let CapyDB pick. */
   region?: string;
-  /** Cluster to place the project on. Omit to let CapyDB pick by region. */
-  cluster_id?: string;
   environment?: string;
   /** Required only for platform admins acting on behalf of an organization. */
   organization_id?: string;

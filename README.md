@@ -82,7 +82,7 @@ For headless/CI, add `"env": { "CAPYDB_API_KEY": "capy_..." }` to the server ent
 
 | Tool | What it does | Notes |
 | --- | --- | --- |
-| `list_clusters` | List clusters (regions) projects can be created on | read-only |
+| `list_regions` | List regions projects can be created in | read-only |
 | `create_project` | Create a Postgres project and wait for provisioning | async; waits up to 5 min |
 | `list_projects` | List your Postgres projects | read-only |
 | `get_project` | Get one project (state, plan, limits) | read-only |
