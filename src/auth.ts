@@ -350,10 +350,11 @@ export class AuthManager {
 
       let response: Response;
       try {
+        // Poll token travels in a header so the sole secret gating key
+        // delivery never lands in server/proxy access logs.
         response = await fetch(
-          `${this.apiUrl}/v1/cli/login/sessions/${encodeURIComponent(pending.sessionId)}` +
-            `?poll_token=${encodeURIComponent(pending.pollToken)}`,
-          { headers: { accept: "application/json" } },
+          `${this.apiUrl}/v1/cli/login/sessions/${encodeURIComponent(pending.sessionId)}`,
+          { headers: { accept: "application/json", "x-capydb-poll-token": pending.pollToken } },
         );
       } catch (error) {
         console.error(

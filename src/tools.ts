@@ -3,7 +3,8 @@
  *
  * Conventions:
  * - Read-only tools set `readOnlyHint: true`.
- * - Destructive tools (preview deletion, restores) set `destructiveHint: true`.
+ * - Destructive tools (preview deletion/reset, restores, imports) set
+ *   `destructiveHint: true`.
  * - Production overwrite restores are intentionally NOT exposed: the `restore`
  *   tool only targets preview databases.
  * - Results are returned as pretty-printed JSON text.
@@ -90,7 +91,16 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         try {
           created = await client.createProject({ name, region, slug });
         } catch (error) {
-          if (error instanceof CapyDBApiError && error.status === 412) {
+          // The control plane rejects provisioning without an active plan as a
+          // 400 whose message comes from ensureOrganizationCanProvision
+          // (backend/internal/service/billing.go) — there is no structured
+          // error code, so match the stable message text.
+          if (
+            error instanceof CapyDBApiError &&
+            error.status === 400 &&
+            (error.message.includes("subscription is required") ||
+              error.message.includes("organization billing is"))
+          ) {
             throw new Error(
               `No active plan. Ask the user to pick a plan (1 month free) at ${BILLING_URL} — then retry this tool.`,
             );
@@ -212,6 +222,41 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
   );
 
   server.registerTool(
+    "reset_preview_database",
+    {
+      title: "Reset a preview database",
+      description:
+        'Reset a preview database back to its source state: "clone" previews are re-cloned from the current production data, "empty" previews are wiped clean. The preview keeps its name and connection route, but its CURRENT DATA IS LOST. The reset runs asynchronously: poll the returned job with get_job.',
+      inputSchema: {
+        preview_id: z.string().describe("Preview database id."),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ preview_id }) => run(auth, () => client.resetPreviewDatabase(preview_id)),
+  );
+
+  server.registerTool(
+    "extend_preview_ttl",
+    {
+      title: "Extend a preview database's TTL",
+      description:
+        "Set a preview database's expiry to ttl_hours from NOW — an absolute new TTL, not a delta added to the remaining time (e.g. ttl_hours 24 makes the preview expire 24 hours from this call, even if it had 3 days left). The preview must be ready and not already expired. Returns the updated preview with its new ttl_expires_at.",
+      inputSchema: {
+        preview_id: z.string().describe("Preview database id."),
+        ttl_hours: z
+          .number()
+          .int()
+          .min(1)
+          .max(168)
+          .describe("New TTL in hours, measured from now (1-168)."),
+      },
+      annotations: { idempotentHint: true },
+    },
+    async ({ preview_id, ttl_hours }) =>
+      run(auth, () => client.extendPreviewDatabase(preview_id, ttl_hours)),
+  );
+
+  server.registerTool(
     "get_preview_connection_strings",
     {
       title: "Get preview database connection strings",
@@ -260,7 +305,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Restore into a preview database",
       description:
-        "Restore from a backup (backup_key), a named restore point (restore_point_id), or a PITR timestamp (restore_time) into a preview database — either an existing one (preview_id) or a new one (preview_name). " +
+        "Restore from a backup (backup_key), a named restore point (restore_point_id), or a PITR timestamp (restore_time) into a preview database — either an existing one (preview_id) or a new one (preview_name; omit both to create an auto-named preview). " +
         "Exactly one source must be given. " +
         "This tool deliberately cannot overwrite the production project database: overwriting production is irreversible and requires explicit human confirmation with the org admin role, so it is only available from the dashboard and CLI. " +
         "Restoring into an existing preview replaces that preview's data.",
@@ -326,7 +371,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           restore_point_id,
           restore_time,
           // Never "project": production overwrite is not exposed over MCP.
-          target_kind: "preview",
+          // "preview" replaces an existing preview; "new_preview" creates one
+          // (named via preview_name, or auto-named when omitted).
+          target_kind: preview_id !== undefined ? "preview" : "new_preview",
           preview_id,
           preview_name,
           ttl_hours,
@@ -354,6 +401,47 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     },
     async ({ project_id, source_url }) =>
       run(auth, () => client.runImportPreflight(project_id, source_url)),
+  );
+
+  server.registerTool(
+    "import_database",
+    {
+      title: "Import a database",
+      description:
+        "Import a live external Postgres database into the project from its connection URL. " +
+        "DESTRUCTIVE: the import OVERWRITES the project's production database — existing data not present in the source is lost and cannot be recovered except from backups. " +
+        "Run import_preflight first, then ask the user before calling this tool; set confirm to true only after the user has explicitly approved overwriting the project database. " +
+        "The import runs asynchronously: poll the returned job with get_job. The source URL contains credentials — do not repeat it back. " +
+        "Importing from a dump file is not supported here (it needs the CLI's upload flow: `capydb import --file`).",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        source_url: z
+          .string()
+          .describe(
+            "Postgres connection URL of the source database (postgres://user:pass@host:port/db).",
+          ),
+        recreate: z
+          .boolean()
+          .optional()
+          .describe("Drop and recreate the target database before importing (cleanest overwrite)."),
+        confirm: z
+          .boolean()
+          .describe(
+            "Must be true. Confirms the user explicitly approved overwriting the project's database with the imported data.",
+          ),
+      },
+      annotations: { destructiveHint: true, openWorldHint: true },
+    },
+    async ({ project_id, source_url, recreate, confirm }) => {
+      if (!confirm) {
+        return errorResult(
+          new Error(
+            "Import not confirmed: the import overwrites the project's database. Ask the user for explicit approval, then retry with confirm: true.",
+          ),
+        );
+      }
+      return run(auth, () => client.createImport(project_id, { source_url, recreate }));
+    },
   );
 
   // ---- Studio (SQL + data browser) ------------------------------------------
@@ -431,7 +519,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Get a job",
       description:
-        'Get a single asynchronous job. Poll until state is "completed" or "failed". Use this after create_preview_database, create_backup, restore, or delete_preview_database.',
+        'Get a single asynchronous job. Poll until state is "completed" or "failed". Use this after create_preview_database, create_backup, restore, import_database, reset_preview_database, or delete_preview_database.',
       inputSchema: {
         job_id: z.string().describe("Job id."),
       },

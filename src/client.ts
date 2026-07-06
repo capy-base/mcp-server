@@ -9,6 +9,7 @@
 import type {
   Backup,
   ConnectionInfo,
+  CreateImportRequest,
   CreatePreviewRequest,
   CreateProjectRequest,
   CreateRestoreRequest,
@@ -171,6 +172,23 @@ export class CapyDBClient {
     return data.connections;
   }
 
+  async resetPreviewDatabase(previewId: string): Promise<Job> {
+    const data = await this.request<{ job: Job }>(
+      "POST",
+      `/v1/preview-databases/${encodeURIComponent(previewId)}/reset`,
+    );
+    return data.job;
+  }
+
+  async extendPreviewDatabase(previewId: string, ttlHours: number): Promise<PreviewDatabase> {
+    const data = await this.request<{ preview: PreviewDatabase }>(
+      "POST",
+      `/v1/preview-databases/${encodeURIComponent(previewId)}/extend`,
+      { body: { ttl_hours: ttlHours } },
+    );
+    return data.preview;
+  }
+
   // ---- Backups, restores, imports -------------------------------------------
 
   async createBackup(projectId: string, label?: string): Promise<Job> {
@@ -194,6 +212,15 @@ export class CapyDBClient {
     const data = await this.request<{ job: Job }>(
       "POST",
       `/v1/projects/${encodeURIComponent(projectId)}/restores`,
+      { body },
+    );
+    return data.job;
+  }
+
+  async createImport(projectId: string, body: CreateImportRequest): Promise<Job> {
+    const data = await this.request<{ job: Job }>(
+      "POST",
+      `/v1/projects/${encodeURIComponent(projectId)}/imports`,
       { body },
     );
     return data.job;

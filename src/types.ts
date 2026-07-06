@@ -212,6 +212,17 @@ export interface CreateRestoreRequest {
   allow_unverified_backup?: boolean;
 }
 
+export interface CreateImportRequest {
+  /**
+   * Live Postgres connection URL to import from. The dump-upload variant
+   * (upload_key) is intentionally not exposed over MCP — it needs the
+   * presigned-upload flow only the CLI and dashboard implement.
+   */
+  source_url: string;
+  /** Drop and recreate the target database before importing. */
+  recreate?: boolean;
+}
+
 export interface SQLQueryRequest {
   query: string;
   /** Row cap for the result (default 200, max 1000). */
