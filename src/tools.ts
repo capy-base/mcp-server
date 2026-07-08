@@ -394,7 +394,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         source_url: z
           .string()
           .describe(
-            "Postgres connection URL of the source database (postgres://user:pass@host:port/db).",
+            "Postgres connection URL of the source database (postgres://user:pass@host:port/db). Must be a direct or session-mode endpoint: transaction-pooler URLs (Neon '-pooler' hostnames, Supabase port 6543) are rejected. Supabase sources get their platform-managed schemas (auth/storage/realtime/…) excluded automatically.",
           ),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -418,7 +418,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         source_url: z
           .string()
           .describe(
-            "Postgres connection URL of the source database (postgres://user:pass@host:port/db).",
+            "Postgres connection URL of the source database (postgres://user:pass@host:port/db). Must be a direct or session-mode endpoint: transaction-pooler URLs (Neon '-pooler' hostnames, Supabase port 6543) are rejected. Supabase sources get their platform-managed schemas (auth/storage/realtime/…) excluded automatically.",
           ),
         recreate: z
           .boolean()
