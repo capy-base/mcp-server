@@ -4,7 +4,7 @@ Official [CapyDB](https://capydb.dev) MCP server. Gives AI agents (Claude Code, 
 [Model Context Protocol](https://modelcontextprotocol.io) client) safe, structured access to your managed
 Postgres: projects, preview databases, backups, restores, imports, SQL, and observability.
 
-Runs over stdio and talks to the CapyDB control plane API — no local database access required.
+Runs over stdio and talks to the CapyDB control plane API - no local database access required.
 
 ## Install
 
@@ -24,14 +24,14 @@ claude mcp add capydb -- npx @capydb/mcp
 
 No setup is required. Credentials are resolved in this order:
 
-1. **`CAPYDB_API_KEY`** environment variable — always wins. Use this for headless/CI setups.
-2. **The CapyDB CLI's saved login** — if you have run `capydb auth login`, the MCP server reuses
+1. **`CAPYDB_API_KEY`** environment variable - always wins. Use this for headless/CI setups.
+2. **The CapyDB CLI's saved login** - if you have run `capydb auth login`, the MCP server reuses
    that credential (same config file, same revocation point).
-3. **First-run browser approval** — with no credential at all, the server still starts. The first
+3. **First-run browser approval** - with no credential at all, the server still starts. The first
    tool call returns a one-time approval URL:
 
    > CapyDB needs a one-time approval. Ask the user to open:
-   > `https://capydb.dev/dashboard/cli/login?session=...` — then retry this tool.
+   > `https://capydb.dev/dashboard/cli/login?session=...` - then retry this tool.
 
    Open the link, approve in the dashboard (signing up and picking a plan inline if needed), and
    retry the tool. The minted API key is saved to the shared CLI config file (`chmod 600`) and no
@@ -46,7 +46,7 @@ on Windows.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `CAPYDB_API_KEY` | no | — | Explicit CapyDB API key; skips the device login. Create one in the dashboard under **Organization → API Keys**. **Use a project-scoped key** for long-lived setups so the agent can only touch the project it is working on. |
+| `CAPYDB_API_KEY` | no | - | Explicit CapyDB API key; skips the device login. Create one in the dashboard under **Organization → API Keys**. **Use a project-scoped key** for long-lived setups so the agent can only touch the project it is working on. |
 | `CAPYDB_API_URL` | no | `https://capydb.dev/api/capydb` | Control plane base URL. Only change this for self-hosted / staging setups. |
 | `CAPYDB_APP_URL` | no | derived from `CAPYDB_API_URL` | Dashboard origin used for device-login approval URLs. |
 
@@ -119,7 +119,7 @@ be chosen per project. If the organization has no active plan, the tool fails wi
   `create_preview_database` (mode `clone`) and its `get_preview_connection_strings`.
 - **Credential hygiene:** the device-login key is org-wide, expires after 90 days, and is meant for
   interactive sessions. For long-lived or shared agent setups, create a **project-scoped key** in the
-  dashboard and pass it via `CAPYDB_API_KEY` instead. Every key — including agent-minted ones — is listed
+  dashboard and pass it via `CAPYDB_API_KEY` instead. Every key - including agent-minted ones - is listed
   with its provenance in the dashboard and can be revoked there at any time.
 
 ## Typical flows

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@capydb/sdk':
+        specifier: ^1.1.0
+        version: 1.1.0
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
@@ -32,6 +35,10 @@ importers:
         version: 7.0.2
 
 packages:
+
+  '@capydb/sdk@1.1.0':
+    resolution: {integrity: sha512-t+9RAWapfGYILxkL2Ps7HEX29naRPV0QAMjjzsV/3JOEHF8YxwMQCpyOxU+cnaZcIYeaQKO4sGxTW69q3L9fJg==}
+    engines: {node: '>=22'}
 
   '@emnapi/core@1.11.1':
     resolution: {integrity: sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ==}
@@ -1251,6 +1258,8 @@ packages:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
+
+  '@capydb/sdk@1.1.0': {}
 
   '@emnapi/core@1.11.1':
     dependencies:

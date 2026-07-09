@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * CapyDB MCP server — stdio entry point.
+ * CapyDB MCP server - stdio entry point.
  *
  * Exposes CapyDB managed Postgres (projects, preview databases, backups,
  * restores, imports, SQL, observability, jobs) to MCP clients.
  *
  * Authentication (in precedence order):
- * 1. CAPYDB_API_KEY (optional) — explicit API key for headless/CI setups.
+ * 1. CAPYDB_API_KEY (optional) - explicit API key for headless/CI setups.
  * 2. The CapyDB CLI's saved credentials (`capydb auth login`) from the shared
  *    user config file.
  * 3. First-run browser device login: with no credential, the server still
@@ -14,9 +14,9 @@
  *    user approves it in the dashboard the minted key is saved for future runs.
  *
  * Other configuration:
- * - CAPYDB_API_URL (optional) — control plane base URL,
+ * - CAPYDB_API_URL (optional) - control plane base URL,
  *                    defaults to https://capydb.dev/api/capydb.
- * - CAPYDB_APP_URL (optional) — dashboard origin for approval URLs; derived
+ * - CAPYDB_APP_URL (optional) - dashboard origin for approval URLs; derived
  *                    from CAPYDB_API_URL when unset.
  */
 

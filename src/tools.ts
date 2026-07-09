@@ -93,7 +93,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         } catch (error) {
           // The control plane rejects provisioning without an active plan as a
           // 400 whose message comes from ensureOrganizationCanProvision
-          // (backend/internal/service/billing.go) — there is no structured
+          // (backend/internal/service/billing.go) - there is no structured
           // error code, so match the stable message text.
           if (
             error instanceof CapyDBApiError &&
@@ -102,7 +102,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
               error.message.includes("organization billing is"))
           ) {
             throw new Error(
-              `No active plan. Ask the user to pick a plan (1 month free) at ${BILLING_URL} — then retry this tool.`,
+              `No active plan. Ask the user to pick a plan (1 month free) at ${BILLING_URL} - then retry this tool.`,
             );
           }
           throw error;
@@ -120,7 +120,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           return {
             project,
             job,
-            note: "Provisioning is still running after 5 minutes — poll with get_job until it completes.",
+            note: "Provisioning is still running after 5 minutes - poll with get_job until it completes.",
           };
         }
         return { project, job };
@@ -158,7 +158,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Get project connection strings",
       description:
         "Get the project's pooled (PgBouncer) and direct Postgres connection URLs. " +
-        "SECRET-BEARING OUTPUT: the URLs embed live database credentials — never log them, echo them into files, or include them in commit messages or chat summaries.",
+        "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries.",
       inputSchema: {
         project_id: z.string().describe("Project id."),
       },
@@ -240,7 +240,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Extend a preview database's TTL",
       description:
-        "Set a preview database's expiry to ttl_hours from NOW — an absolute new TTL, not a delta added to the remaining time (e.g. ttl_hours 24 makes the preview expire 24 hours from this call, even if it had 3 days left). The preview must be ready and not already expired. Returns the updated preview with its new ttl_expires_at.",
+        "Set a preview database's expiry to ttl_hours from NOW - an absolute new TTL, not a delta added to the remaining time (e.g. ttl_hours 24 makes the preview expire 24 hours from this call, even if it had 3 days left). The preview must be ready and not already expired. Returns the updated preview with its new ttl_expires_at.",
       inputSchema: {
         preview_id: z.string().describe("Preview database id."),
         ttl_hours: z
@@ -262,7 +262,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Get preview database connection strings",
       description:
         "Get a preview database's pooled and direct Postgres connection URLs. " +
-        "SECRET-BEARING OUTPUT: the URLs embed live database credentials — never log them, echo them into files, or include them in commit messages or chat summaries.",
+        "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries.",
       inputSchema: {
         preview_id: z.string().describe("Preview database id."),
       },
@@ -305,7 +305,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Restore into a preview database",
       description:
-        "Restore from a backup (backup_key), a named restore point (restore_point_id), or a PITR timestamp (restore_time) into a preview database — either an existing one (preview_id) or a new one (preview_name; omit both to create an auto-named preview). " +
+        "Restore from a backup (backup_key), a named restore point (restore_point_id), or a PITR timestamp (restore_time) into a preview database - either an existing one (preview_id) or a new one (preview_name; omit both to create an auto-named preview). " +
         "Exactly one source must be given. " +
         "This tool deliberately cannot overwrite the production project database: overwriting production is irreversible and requires explicit human confirmation with the org admin role, so it is only available from the dashboard and CLI. " +
         "Restoring into an existing preview replaces that preview's data.",
@@ -388,7 +388,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Run an import preflight",
       description:
-        "Synchronously inspect an external source Postgres database (size, server version, installed extensions) and report whether an import into the project is expected to succeed, with per-check pass/warn/fail detail. Does not modify either database. The source URL contains credentials — do not repeat it back.",
+        "Synchronously inspect an external source Postgres database (size, server version, installed extensions) and report whether an import into the project is expected to succeed, with per-check pass/warn/fail detail. Does not modify either database. The source URL contains credentials - do not repeat it back.",
       inputSchema: {
         project_id: z.string().describe("Project id."),
         source_url: z
@@ -409,9 +409,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Import a database",
       description:
         "Import a live external Postgres database into the project from its connection URL. " +
-        "DESTRUCTIVE: the import OVERWRITES the project's production database — existing data not present in the source is lost and cannot be recovered except from backups. " +
+        "DESTRUCTIVE: the import OVERWRITES the project's production database - existing data not present in the source is lost and cannot be recovered except from backups. " +
         "Run import_preflight first, then ask the user before calling this tool; set confirm to true only after the user has explicitly approved overwriting the project database. " +
-        "The import runs asynchronously: poll the returned job with get_job. The source URL contains credentials — do not repeat it back. " +
+        "The import runs asynchronously: poll the returned job with get_job. The source URL contains credentials - do not repeat it back. " +
         "Importing from a dump file is not supported here (it needs the CLI's upload flow: `capydb import --file`).",
       inputSchema: {
         project_id: z.string().describe("Project id."),
@@ -451,7 +451,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Run SQL",
       description:
-        "Execute a SQL statement against the LIVE project database. Intended for read-mostly use (SELECTs, EXPLAIN, lightweight inspection) — DML/DDL is not blocked, so treat writes with the same care as running them in production. Results are capped (default 200 rows, max 1000) and queries time out after 15 seconds. Every execution is recorded in the project's SQL history.",
+        "Execute a SQL statement against the LIVE project database. Intended for read-mostly use (SELECTs, EXPLAIN, lightweight inspection) - DML/DDL is not blocked, so treat writes with the same care as running them in production. Results are capped (default 200 rows, max 1000) and queries time out after 15 seconds. Every execution is recorded in the project's SQL history.",
       inputSchema: {
         project_id: z.string().describe("Project id."),
         query: z.string().describe("SQL statement to execute."),

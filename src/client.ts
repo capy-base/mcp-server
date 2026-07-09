@@ -1,7 +1,7 @@
 /**
  * Thin typed fetch client for the CapyDB control plane API.
  *
- * Intentionally has no dependency on `@capydb/sdk` — the MCP server only needs
+ * Intentionally has no dependency on `@capydb/sdk` - the MCP server only needs
  * a small slice of the API and a single-file client keeps the published
  * package lean. The API shape mirrors `backend/internal/httpapi/openapi.json`.
  */
@@ -306,7 +306,7 @@ function extractErrorMessage(body: string, status: number): string {
       return (parsed as { error: string }).error;
     }
   } catch {
-    // Not JSON — fall through to the generic message.
+    // Not JSON - fall through to the generic message.
   }
   return body.length > 0 ? `HTTP ${status}: ${body.slice(0, 500)}` : `HTTP ${status}`;
 }
