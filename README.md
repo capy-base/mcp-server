@@ -3,6 +3,8 @@
 Official [CapyDB](https://capydb.dev) MCP server. Gives AI agents (Claude Code, Cursor, and any other
 [Model Context Protocol](https://modelcontextprotocol.io) client) safe, structured access to your managed
 Postgres: projects, preview databases, backups, restores, imports, SQL, and observability.
+Every CapyDB project runs in its own isolated database cell - a dedicated Postgres runtime
+reached with normal connection strings.
 
 Runs over stdio and talks to the CapyDB control plane API - no local database access required.
 
