@@ -78,6 +78,12 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "Create a new CapyDB Postgres project. Provisioning is asynchronous; this tool waits up to 5 minutes for the provision job to finish and returns the final project and job state. The project's plan is derived from the organization's billing state and cannot be chosen here. Omit the region to let CapyDB pick (use list_regions to see what is available).",
       inputSchema: {
         name: z.string().describe("Project name."),
+        postgres_version: z
+          .enum(["16", "17", "18"])
+          .optional()
+          .describe(
+            "Postgres major version for the database. Omit for the platform default. Immutable after creation; previews and restores inherit it.",
+          ),
         region: z
           .string()
           .optional()
@@ -85,11 +91,11 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         slug: z.string().optional().describe("URL-safe slug; derived from the name when omitted."),
       },
     },
-    async ({ name, region, slug }) =>
+    async ({ name, postgres_version, region, slug }) =>
       run(auth, async () => {
         let created: { project: Project; job: Job };
         try {
-          created = await client.createProject({ name, region, slug });
+          created = await client.createProject({ name, postgres_version, region, slug });
         } catch (error) {
           // The control plane rejects provisioning without an active plan as a
           // 400 whose message comes from ensureOrganizationCanProvision
@@ -185,9 +191,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         ttl_hours: z
           .number()
           .int()
-          .positive()
+          .min(1)
+          .max(168)
           .optional()
-          .describe("Time to live in hours before the preview expires."),
+          .describe("Time to live in hours before the preview expires (1-168, default 24)."),
       },
     },
     async ({ project_id, name, mode, ttl_hours }) =>
@@ -328,9 +335,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         ttl_hours: z
           .number()
           .int()
-          .positive()
+          .min(1)
+          .max(168)
           .optional()
-          .describe("TTL for a newly created preview target."),
+          .describe("TTL for a newly created preview target (1-168 hours, default 24)."),
         allow_unverified_backup: z
           .boolean()
           .optional()
@@ -440,7 +448,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           ),
         );
       }
-      return run(auth, () => client.createImport(project_id, { source_url, recreate }));
+      // The server now enforces the confirm too; forward the agent's
+      // assertion instead of re-asserting it client-side.
+      return run(auth, () => client.createImport(project_id, { source_url, recreate, confirm }));
     },
   );
 

@@ -25,21 +25,21 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
     "format": "oxfmt --write src",
     "prepublishOnly": "pnpm typecheck && pnpm build"
   },
   "dependencies": {
-    "@capydb/sdk": "^1.1.0",
+    "@capydb/sdk": "^1.1.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
-    "oxfmt": "0.58.0",
-    "oxlint": "1.73.0",
-    "tsdown": "^0.22.4",
+    "oxfmt": "0.59.0",
+    "oxlint": "1.74.0",
+    "tsdown": "^0.22.8",
     "typescript": "^7.0.2"
   },
   "packageManager": "pnpm@11.10.0",

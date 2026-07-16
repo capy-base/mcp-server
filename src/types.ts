@@ -12,7 +12,6 @@ export type {
   ActiveQuerySample,
   Backup,
   CreatePreviewRequest,
-  CreateProjectRequest,
   CreateRestoreRequest,
   DatabaseTable,
   ImportPreflightCheck,
@@ -26,6 +25,27 @@ export type {
   SourceInspection,
   TableRowsResult,
 } from "@capydb/sdk";
+
+/**
+ * `POST /v1/projects` body. Defined locally (not re-exported from the SDK)
+ * because `postgres_version` lands in the next `@capydb/sdk` publish; the shape
+ * mirrors CreateProjectRequest in the OpenAPI document. Switch back to the SDK
+ * re-export once the published SDK includes it.
+ */
+export interface CreateProjectRequest {
+  environment?: "production" | "non_production";
+  name: string;
+  /** Required only for platform admins acting on behalf of an organization. */
+  organization_id?: string;
+  /**
+   * Postgres major version for the new database ("16" | "17" | "18"). Omit
+   * for the platform default. Immutable after creation.
+   */
+  postgres_version?: "16" | "17" | "18";
+  /** Region to place the project in. Omit to let CapyDB pick. */
+  region?: string;
+  slug?: string;
+}
 
 /** Response from `GET /v1/regions` — the regions a project can be placed in. */
 export interface RegionsResponse {
@@ -64,4 +84,9 @@ export interface CreateImportRequest {
   source_url: string;
   /** Drop and recreate the target database before importing. */
   recreate?: boolean;
+  /**
+   * Must be true: the API refuses imports without explicit confirmation (an
+   * import writes over the project's live database).
+   */
+  confirm: boolean;
 }
