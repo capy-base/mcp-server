@@ -1,7 +1,7 @@
 /**
  * Thin typed fetch client for the CapyDB control plane API.
  *
- * Intentionally has no dependency on `@capydb/sdk` — the MCP server only needs
+ * Intentionally has no dependency on `@capydb/sdk` - the MCP server only needs
  * a small slice of the API and a single-file client keeps the published
  * package lean. The API shape mirrors `backend/internal/httpapi/openapi.json`.
  */
@@ -12,14 +12,18 @@ import type {
   CreateImportRequest,
   CreatePreviewRequest,
   CreateProjectRequest,
+  CreateRestorePointRequest,
   CreateRestoreRequest,
+  DatabaseSchema,
   DatabaseTable,
+  GeneratedTypes,
   ImportPreflightResult,
   Job,
   PreviewDatabase,
   Project,
   ProjectObservability,
   RegionsResponse,
+  RestorePoint,
   SQLQueryRequest,
   SQLQueryResult,
   TableRowsResult,
@@ -291,6 +295,84 @@ export class CapyDBClient {
     );
     return data.jobs ?? [];
   }
+
+  // ---- Schema & type generation ---------------------------------------------
+
+  async getProjectSchema(projectId: string): Promise<DatabaseSchema> {
+    const data = await this.request<{ schema: DatabaseSchema }>(
+      "GET",
+      `/v1/projects/${encodeURIComponent(projectId)}/schema`,
+    );
+    return data.schema;
+  }
+
+  async getPreviewSchema(previewId: string): Promise<DatabaseSchema> {
+    const data = await this.request<{ schema: DatabaseSchema }>(
+      "GET",
+      `/v1/preview-databases/${encodeURIComponent(previewId)}/schema`,
+    );
+    return data.schema;
+  }
+
+  async generateProjectSchemaTypes(
+    projectId: string,
+    language?: string,
+    style?: string,
+  ): Promise<GeneratedTypes> {
+    const data = await this.request<{ types: GeneratedTypes }>(
+      "GET",
+      `/v1/projects/${encodeURIComponent(projectId)}/schema/types`,
+      { query: { language, style } },
+    );
+    return data.types;
+  }
+
+  async generatePreviewSchemaTypes(
+    previewId: string,
+    language?: string,
+    style?: string,
+  ): Promise<GeneratedTypes> {
+    const data = await this.request<{ types: GeneratedTypes }>(
+      "GET",
+      `/v1/preview-databases/${encodeURIComponent(previewId)}/schema/types`,
+      { query: { language, style } },
+    );
+    return data.types;
+  }
+
+  // ---- Restore points --------------------------------------------------------
+
+  async listRestorePoints(
+    projectId: string,
+  ): Promise<{ restore_points: RestorePoint[]; pitr_window_days: number }> {
+    const data = await this.request<{
+      restore_points: RestorePoint[] | null;
+      pitr_window_days: number;
+    }>("GET", `/v1/projects/${encodeURIComponent(projectId)}/restore-points`);
+    return {
+      restore_points: data.restore_points ?? [],
+      pitr_window_days: data.pitr_window_days,
+    };
+  }
+
+  async createRestorePoint(
+    projectId: string,
+    body: CreateRestorePointRequest,
+  ): Promise<RestorePoint> {
+    const data = await this.request<{ restore_point: RestorePoint }>(
+      "POST",
+      `/v1/projects/${encodeURIComponent(projectId)}/restore-points`,
+      { body },
+    );
+    return data.restore_point;
+  }
+
+  async deleteRestorePoint(projectId: string, restorePointId: string): Promise<void> {
+    await this.request<unknown>(
+      "DELETE",
+      `/v1/projects/${encodeURIComponent(projectId)}/restore-points/${encodeURIComponent(restorePointId)}`,
+    );
+  }
 }
 
 /** The control plane returns `{ "error": "<message>" }` for failures. */
@@ -306,7 +388,7 @@ function extractErrorMessage(body: string, status: number): string {
       return (parsed as { error: string }).error;
     }
   } catch {
-    // Not JSON — fall through to the generic message.
+    // Not JSON - fall through to the generic message.
   }
   return body.length > 0 ? `HTTP ${status}: ${body.slice(0, 500)}` : `HTTP ${status}`;
 }

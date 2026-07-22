@@ -2,7 +2,7 @@
  * Credential resolution and first-run browser device login.
  *
  * Key precedence:
- * 1. `CAPYDB_API_KEY` environment variable — always wins (headless/CI).
+ * 1. `CAPYDB_API_KEY` environment variable - always wins (headless/CI).
  * 2. The CapyDB CLI's saved credentials (active organization) from the shared
  *    user config file, so the CLI and the MCP server share one credential and
  *    one revocation point.
@@ -12,7 +12,7 @@
  *
  * The config file location and JSON schema mirror the Go CLI exactly
  * (`cli/internal/config/config.go`): Go's `os.UserConfigDir()` plus
- * `capydb/config.json` — `~/Library/Application Support` on macOS, `%AppData%`
+ * `capydb/config.json` - `~/Library/Application Support` on macOS, `%AppData%`
  * on Windows, `$XDG_CONFIG_HOME` (default `~/.config`) elsewhere.
  */
 
@@ -38,7 +38,7 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** One organization's saved credentials — mirrors the CLI's `OrganizationConfig`. */
+/** One organization's saved credentials - mirrors the CLI's `OrganizationConfig`. */
 interface OrganizationEntry {
   api_key: string;
   api_url?: string;
@@ -80,7 +80,7 @@ function nonEmpty(value: string | undefined): string | undefined {
   return trimmed !== undefined && trimmed !== "" ? trimmed : undefined;
 }
 
-/** Mirrors Go's `os.UserConfigDir()` + `capydb/config.json` — the CLI's config path. */
+/** Mirrors Go's `os.UserConfigDir()` + `capydb/config.json` - the CLI's config path. */
 export function userConfigPath(): string {
   switch (process.platform) {
     case "darwin":
@@ -97,7 +97,7 @@ export function userConfigPath(): string {
 }
 
 /**
- * Dashboard origin for approval URLs — mirrors the CLI's `DefaultAppURL`:
+ * Dashboard origin for approval URLs - mirrors the CLI's `DefaultAppURL`:
  * `CAPYDB_APP_URL` env, else strip the `/api/capydb` suffix from the API URL,
  * else the API URL origin itself, else capydb.dev.
  */
@@ -112,7 +112,7 @@ export function dashboardUrl(apiUrl: string): string {
 
 function approvalMessage(url: string): string {
   return (
-    `CapyDB needs a one-time approval. Ask the user to open: ${url} — then retry this tool. ` +
+    `CapyDB needs a one-time approval. Ask the user to open: ${url} - then retry this tool. ` +
     "The approval link expires in 10 minutes; once approved, the minted API key is saved to " +
     "the CapyDB CLI config and no further approval is needed."
   );
@@ -165,7 +165,7 @@ async function readStoredConfig(path: string): Promise<StoredConfig | undefined>
   }
 
   // Legacy pre-multi-org shape: a flat single-credential object. Read it
-  // compatibly but never write it back — the CLI owns that migration.
+  // compatibly but never write it back - the CLI owns that migration.
   const legacyKey = nonEmpty(optionalString(parsed["api_key"]));
   if (legacyKey === undefined) return undefined;
   const legacyOrgId = nonEmpty(optionalString(parsed["organization_id"])) ?? DEFAULT_ORG_KEY;
@@ -183,7 +183,7 @@ async function readStoredConfig(path: string): Promise<StoredConfig | undefined>
   };
 }
 
-/** Active-organization selection — mirrors the CLI's `UserConfig.Active()`. */
+/** Active-organization selection - mirrors the CLI's `UserConfig.Active()`. */
 function activeOrganization(config: StoredConfig): OrganizationEntry | undefined {
   const ids = Object.keys(config.organizations);
   if (ids.length === 0) return undefined;
@@ -245,7 +245,7 @@ export class AuthManager {
       case "config":
         return `CLI config ${userConfigPath()}`;
       case "none":
-        return "none — the first tool call will start a browser device login";
+        return "none - the first tool call will start a browser device login";
     }
   }
 
@@ -271,7 +271,7 @@ export class AuthManager {
       if (this.pending !== undefined) {
         return { ok: false, message: approvalMessage(this.pending.approvalUrl) };
       }
-      // The pending session expired while waiting — fall through to a new one.
+      // The pending session expired while waiting - fall through to a new one.
     }
 
     // Pick up a credential saved since startup (e.g. the user ran `capydb auth login`).
@@ -338,7 +338,7 @@ export class AuthManager {
       : expiresAtParsed;
 
     const approvalUrl = `${dashboardUrl(this.apiUrl)}/dashboard/cli/login?session=${encodeURIComponent(sessionId)}`;
-    console.error(`capydb-mcp: device login started — approve at ${approvalUrl}`);
+    console.error(`capydb-mcp: device login started - approve at ${approvalUrl}`);
     return { sessionId, pollToken, expiresAt, approvalUrl };
   }
 
@@ -364,7 +364,7 @@ export class AuthManager {
       }
 
       if (response.status === 404 || response.status === 410) {
-        // Gone or expired server-side — clear the session so the next call starts fresh.
+        // Gone or expired server-side - clear the session so the next call starts fresh.
         if (this.pending === pending) this.pending = undefined;
         console.error("capydb-mcp: device login session expired before approval");
         return;
@@ -397,7 +397,7 @@ export class AuthManager {
 
       this.cachedKey = apiKey;
       if (this.pending === pending) this.pending = undefined;
-      console.error("capydb-mcp: device login approved — API key minted");
+      console.error("capydb-mcp: device login approved - API key minted");
 
       try {
         await this.persistCredentials({
@@ -434,7 +434,7 @@ export class AuthManager {
     try {
       existing = await readStoredConfig(path);
     } catch (error) {
-      // An unreadable file is replaced — the credential it held was unusable anyway.
+      // An unreadable file is replaced - the credential it held was unusable anyway.
       console.error(
         `capydb-mcp: replacing unreadable CLI config: ${error instanceof Error ? error.message : String(error)}`,
       );

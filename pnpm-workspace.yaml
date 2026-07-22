@@ -1,0 +1,4 @@
+# Bleeding-edge policy: we intentionally consume fresh releases (including our
+# own @capydb/sdk published the same day), so pnpm's minimum-release-age
+# supply-chain gate is disabled here like in the other CapyDB JS repos.
+minimumReleaseAge: 0

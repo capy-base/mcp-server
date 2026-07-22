@@ -1,62 +1,55 @@
 /**
- * Response types for the CapyDB control plane API.
+ * CapyDB control-plane types used by the MCP tools.
  *
- * Hand-derived from `backend/internal/httpapi/openapi.json` — the authoritative
- * source for the API shape. Only the subset of the API surfaced by the MCP
- * tools is typed here.
+ * Entity and request shapes are re-exported from `@capydb/sdk` (generated from
+ * the control plane's OpenAPI document) so they can never drift from the API.
+ * A handful of request/response shapes the SDK only exposes as operation-level
+ * types (regions, connections, SQL, import) are defined locally against the same
+ * OpenAPI source.
  */
+
+export type {
+  ActiveQuerySample,
+  Backup,
+  CreatePreviewRequest,
+  CreateRestoreRequest,
+  DatabaseTable,
+  ImportPreflightCheck,
+  ImportPreflightResult,
+  Job,
+  PreviewDatabase,
+  Project,
+  ProjectObservability,
+  SlowQuerySample,
+  SourceExtension,
+  SourceInspection,
+  TableRowsResult,
+} from "@capydb/sdk";
+
+/**
+ * `POST /v1/projects` body. Defined locally (not re-exported from the SDK)
+ * because `postgres_version` lands in the next `@capydb/sdk` publish; the shape
+ * mirrors CreateProjectRequest in the OpenAPI document. Switch back to the SDK
+ * re-export once the published SDK includes it.
+ */
+export interface CreateProjectRequest {
+  environment?: "production" | "non_production";
+  name: string;
+  /** Required only for platform admins acting on behalf of an organization. */
+  organization_id?: string;
+  /**
+   * Postgres major version for the new database ("16" | "17" | "18"). Omit
+   * for the platform default. Immutable after creation.
+   */
+  postgres_version?: "16" | "17" | "18";
+  /** Region to place the project in. Omit to let CapyDB pick. */
+  region?: string;
+  slug?: string;
+}
 
 /** Response from `GET /v1/regions` — the regions a project can be placed in. */
 export interface RegionsResponse {
   regions: string[];
-}
-
-export interface Project {
-  id: string;
-  organization_id: string;
-  name: string;
-  slug: string;
-  region: string;
-  environment: string;
-  plan: string;
-  state: string;
-  primary_instance_id?: string;
-  database_name?: string;
-  role_name?: string;
-  public_host?: string;
-  pooled_port?: number;
-  direct_port?: number;
-  ssl_mode?: string;
-  storage_limit_bytes?: number;
-  max_connections?: number;
-  statement_timeout?: string;
-  idle_transaction_timeout?: string;
-  latest_job_id?: string;
-  last_error?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PreviewDatabase {
-  id: string;
-  project_id: string;
-  name: string;
-  mode?: string;
-  state: string;
-  database_name?: string;
-  role_name?: string;
-  public_host?: string;
-  pooled_port?: number;
-  direct_port?: number;
-  ssl_mode?: string;
-  source_kind?: string;
-  source_database?: string;
-  source_backup_key?: string;
-  source_restore_time?: string;
-  ttl_expires_at?: string;
-  last_error?: string;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface ConnectionInfo {
@@ -65,70 +58,6 @@ export interface ConnectionInfo {
   /** Direct Postgres connection URL (for migrations and long-lived sessions). */
   direct_url?: string;
   username: string;
-}
-
-export interface Backup {
-  id: string;
-  project_id: string;
-  backup_key?: string;
-  database_name?: string;
-  label?: string;
-  size_bytes?: number;
-  state: string;
-  verification_state?: "pending" | "verified" | "failed";
-  verification_error?: string;
-  verified_at?: string;
-  created_at: string;
-}
-
-export interface Job {
-  id: string;
-  organization_id: string;
-  project_id?: string;
-  preview_database_id?: string;
-  host_id?: string;
-  instance_id?: string;
-  type: string;
-  state: "pending" | "running" | "completed" | "failed";
-  attempts: number;
-  max_attempts: number;
-  error?: string;
-  last_exit_code?: number;
-  last_stderr?: string;
-  last_stdout?: string;
-  retry_classification?: string;
-  locked_resource?: string;
-  claimed_at?: string;
-  claimed_by?: string;
-  started_at?: string;
-  completed_at?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ImportPreflightCheck {
-  name: string;
-  status: "pass" | "warn" | "fail";
-  detail?: string;
-}
-
-export interface SourceExtension {
-  name: string;
-  version: string;
-}
-
-export interface SourceInspection {
-  server_version: string;
-  database_size_bytes: number;
-  extensions: SourceExtension[];
-}
-
-export interface ImportPreflightResult {
-  ok: boolean;
-  checks: ImportPreflightCheck[];
-  source: SourceInspection;
-  storage_limit_bytes: number;
-  target_version: string;
 }
 
 export interface SQLQueryResult {
@@ -140,76 +69,10 @@ export interface SQLQueryResult {
   truncated: boolean;
 }
 
-export interface DatabaseTable {
-  schema: string;
-  table: string;
-  type: string;
-}
-
-export interface TableRowsResult {
-  columns: string[];
-  rows: Record<string, unknown>[];
-}
-
-export interface ActiveQuerySample {
-  pid: number;
-  username: string;
-  state: string;
+export interface SQLQueryRequest {
   query: string;
-  duration_ms: number;
-  wait_event?: string;
-  wait_event_type?: string;
-}
-
-export interface SlowQuerySample {
-  query: string;
-  calls: number;
-  rows: number;
-  total_time_ms: number;
-  mean_time_ms: number;
-}
-
-export interface ProjectObservability {
-  connection_count: number;
-  connection_limit: number;
-  connection_usage_percent: number;
-  database_size_bytes: number;
-  storage_limit_bytes: number;
-  storage_usage_percent: number;
-  pg_stat_statements: boolean;
-  active_queries: ActiveQuerySample[];
-  slow_queries: SlowQuerySample[];
-  alerts: string[];
-}
-
-export interface CreateProjectRequest {
-  name: string;
-  /** URL-safe slug; derived from the name when omitted. */
-  slug?: string;
-  /** Region to place the project in. Omit to let CapyDB pick. */
-  region?: string;
-  environment?: string;
-  /** Required only for platform admins acting on behalf of an organization. */
-  organization_id?: string;
-}
-
-export interface CreatePreviewRequest {
-  name?: string;
-  /** Data source mode for the preview (e.g. `empty`, `clone`). */
-  mode?: string;
-  ttl_hours?: number;
-}
-
-export interface CreateRestoreRequest {
-  backup_key: string;
-  restore_point_id?: string;
-  restore_time?: string;
-  target_kind?: string;
-  preview_id?: string;
-  preview_name?: string;
-  ttl_hours?: number;
-  recreate?: boolean;
-  allow_unverified_backup?: boolean;
+  /** Row cap for the result (default 200, max 1000). */
+  max_rows?: number;
 }
 
 export interface CreateImportRequest {
@@ -221,10 +84,123 @@ export interface CreateImportRequest {
   source_url: string;
   /** Drop and recreate the target database before importing. */
   recreate?: boolean;
+  /**
+   * Must be true: the API refuses imports without explicit confirmation (an
+   * import writes over the project's live database).
+   */
+  confirm: boolean;
 }
 
-export interface SQLQueryRequest {
-  query: string;
-  /** Row cap for the result (default 200, max 1000). */
-  max_rows?: number;
+/**
+ * Canonical schema document from `GET /v1/projects/{id}/schema` (and its
+ * preview-database sibling). Defined locally because the schema endpoints land
+ * in the next `@capydb/sdk` publish; switch back to SDK re-exports once
+ * published.
+ */
+export interface DatabaseSchema {
+  database_name: string;
+  extensions: SchemaExtension[];
+  postgres_version: string;
+  schemas: SchemaNamespace[];
+}
+
+export interface SchemaExtension {
+  name: string;
+  version: string;
+}
+
+export interface SchemaNamespace {
+  enums: SchemaEnum[];
+  name: string;
+  tables: SchemaTable[];
+}
+
+export interface SchemaEnum {
+  comment?: string;
+  name: string;
+  values: string[];
+}
+
+export interface SchemaTable {
+  columns: SchemaColumn[];
+  comment?: string;
+  foreign_keys: SchemaForeignKey[];
+  kind: "table" | "partitioned_table" | "view" | "materialized_view" | "foreign_table";
+  name: string;
+  primary_key: string[];
+  unique_constraints: SchemaUniqueConstraint[];
+}
+
+export interface SchemaColumn {
+  /** Declared array dimension count (>= 1 for array columns). */
+  array_dims?: number;
+  comment?: string;
+  /** Formatted pg type, e.g. `character varying(255)`. */
+  data_type: string;
+  default?: string;
+  /** Set for identity columns. */
+  identity?: "always" | "by_default";
+  is_array: boolean;
+  is_enum: boolean;
+  is_generated: boolean;
+  is_nullable: boolean;
+  name: string;
+  position: number;
+  /** Underlying pg type name; the element type for array columns. */
+  udt_name: string;
+  udt_schema: string;
+}
+
+export interface SchemaForeignKey {
+  columns: string[];
+  name: string;
+  on_delete: string;
+  on_update: string;
+  referenced_columns: string[];
+  referenced_schema: string;
+  referenced_table: string;
+}
+
+export interface SchemaUniqueConstraint {
+  columns: string[];
+  name: string;
+}
+
+/** Generated source file from `GET /v1/projects/{id}/schema/types`. */
+export interface GeneratedTypes {
+  content: string;
+  filename: string;
+  language: "typescript" | "zod" | "drizzle";
+  style?: "capydb" | "supabase";
+}
+
+/**
+ * Named restore point (`/v1/projects/{id}/restore-points`). Defined locally
+ * for the same publish-lag reason as the schema types above.
+ */
+export interface RestorePoint {
+  backup_id?: string;
+  backup_key?: string;
+  created_at: string;
+  created_by_actor_id?: string;
+  created_by_actor_kind: string;
+  id: string;
+  kind: string;
+  label: string;
+  note?: string;
+  organization_id: string;
+  pitr_time?: string;
+  project_id: string;
+  state: string;
+  updated_at: string;
+}
+
+export interface CreateRestorePointRequest {
+  backup_key?: string;
+  /** Backup pins an existing recorded backup; pitr pins a timestamp. */
+  kind: "backup" | "pitr";
+  label: string;
+  note?: string;
+  /** PITR target timestamp (RFC 3339) when kind is "pitr". */
+  pitr_time?: string;
 }

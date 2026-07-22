@@ -3,8 +3,10 @@
 Official [CapyDB](https://capydb.dev) MCP server. Gives AI agents (Claude Code, Cursor, and any other
 [Model Context Protocol](https://modelcontextprotocol.io) client) safe, structured access to your managed
 Postgres: projects, preview databases, backups, restores, imports, SQL, and observability.
+Every CapyDB project runs in its own isolated database cell - a dedicated Postgres runtime
+reached with normal connection strings.
 
-Runs over stdio and talks to the CapyDB control plane API — no local database access required.
+Runs over stdio and talks to the CapyDB control plane API - no local database access required.
 
 ## Install
 
@@ -24,14 +26,14 @@ claude mcp add capydb -- npx @capydb/mcp
 
 No setup is required. Credentials are resolved in this order:
 
-1. **`CAPYDB_API_KEY`** environment variable — always wins. Use this for headless/CI setups.
-2. **The CapyDB CLI's saved login** — if you have run `capydb auth login`, the MCP server reuses
+1. **`CAPYDB_API_KEY`** environment variable - always wins. Use this for headless/CI setups.
+2. **The CapyDB CLI's saved login** - if you have run `capydb auth login`, the MCP server reuses
    that credential (same config file, same revocation point).
-3. **First-run browser approval** — with no credential at all, the server still starts. The first
+3. **First-run browser approval** - with no credential at all, the server still starts. The first
    tool call returns a one-time approval URL:
 
    > CapyDB needs a one-time approval. Ask the user to open:
-   > `https://capydb.dev/dashboard/cli/login?session=...` — then retry this tool.
+   > `https://capydb.dev/dashboard/cli/login?session=...` - then retry this tool.
 
    Open the link, approve in the dashboard (signing up and picking a plan inline if needed), and
    retry the tool. The minted API key is saved to the shared CLI config file (`chmod 600`) and no
@@ -46,7 +48,7 @@ on Windows.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `CAPYDB_API_KEY` | no | — | Explicit CapyDB API key; skips the device login. Create one in the dashboard under **Organization → API Keys**. **Use a project-scoped key** for long-lived setups so the agent can only touch the project it is working on. |
+| `CAPYDB_API_KEY` | no | - | Explicit CapyDB API key; skips the device login. Create one in the dashboard under **Organization → API Keys**. **Use a project-scoped key** for long-lived setups so the agent can only touch the project it is working on. |
 | `CAPYDB_API_URL` | no | `https://capydb.dev/api/capydb` | Control plane base URL. Only change this for self-hosted / staging setups. |
 | `CAPYDB_APP_URL` | no | derived from `CAPYDB_API_URL` | Dashboard origin used for device-login approval URLs. |
 
@@ -90,12 +92,20 @@ For headless/CI, add `"env": { "CAPYDB_API_KEY": "capy_..." }` to the server ent
 | `create_preview_database` | Create a disposable preview/branch DB (`empty` or `clone`) | async job |
 | `list_preview_databases` | List previews with state and TTL | read-only |
 | `delete_preview_database` | Delete a preview and its role | **destructive**, async job |
+| `reset_preview_database` | Reset a preview back to its base state | **destructive** to the preview, async job |
+| `extend_preview_ttl` | Extend a preview's TTL | mutates TTL only |
 | `get_preview_connection_strings` | Pooled + direct URLs for a preview | **secret-bearing output** |
 | `create_backup` | On-demand backup of the project DB | async job |
 | `list_backups` | List backups incl. verification state | read-only |
 | `restore` | Restore a backup / restore point / PITR timestamp **into a preview** | **destructive** to the target preview; cannot overwrite production |
+| `list_restore_points` | List named restore points + the PITR window | read-only |
+| `create_restore_point` | Pin an existing backup key or a PITR timestamp before a risky change | backup keys come from `list_backups` after `create_backup` completes |
+| `delete_restore_point` | Delete a restore point after the change is verified | **destructive** |
 | `import_preflight` | Check an external source DB before an import | read-only, connects out |
+| `import_database` | Import an external database into the project | **destructive**, requires `confirm: true` |
 | `run_sql` | Run a SQL statement against the live project DB | read-mostly; row-capped, 15s timeout, recorded in SQL history |
+| `get_schema` | Complete schema document: tables, columns, keys, enums, extensions | read-only; prefer over catalog queries |
+| `generate_types` | Generate TypeScript / Zod / Drizzle code from the live schema | read-only; `style: supabase` for supabase-js compat |
 | `list_tables` | List tables and views | read-only |
 | `get_table_rows` | Read rows from a table | read-only |
 | `get_observability` | Live metrics: connections, size, active/slow queries, alerts | read-only |
@@ -119,7 +129,7 @@ be chosen per project. If the organization has no active plan, the tool fails wi
   `create_preview_database` (mode `clone`) and its `get_preview_connection_strings`.
 - **Credential hygiene:** the device-login key is org-wide, expires after 90 days, and is meant for
   interactive sessions. For long-lived or shared agent setups, create a **project-scoped key** in the
-  dashboard and pass it via `CAPYDB_API_KEY` instead. Every key — including agent-minted ones — is listed
+  dashboard and pass it via `CAPYDB_API_KEY` instead. Every key - including agent-minted ones - is listed
   with its provenance in the dashboard and can be revoked there at any time.
 
 ## Typical flows

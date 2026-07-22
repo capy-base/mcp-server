@@ -78,6 +78,12 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "Create a new CapyDB Postgres project. Provisioning is asynchronous; this tool waits up to 5 minutes for the provision job to finish and returns the final project and job state. The project's plan is derived from the organization's billing state and cannot be chosen here. Omit the region to let CapyDB pick (use list_regions to see what is available).",
       inputSchema: {
         name: z.string().describe("Project name."),
+        postgres_version: z
+          .enum(["16", "17", "18"])
+          .optional()
+          .describe(
+            "Postgres major version for the database. Omit for the platform default. Immutable after creation; previews and restores inherit it.",
+          ),
         region: z
           .string()
           .optional()
@@ -85,15 +91,15 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         slug: z.string().optional().describe("URL-safe slug; derived from the name when omitted."),
       },
     },
-    async ({ name, region, slug }) =>
+    async ({ name, postgres_version, region, slug }) =>
       run(auth, async () => {
         let created: { project: Project; job: Job };
         try {
-          created = await client.createProject({ name, region, slug });
+          created = await client.createProject({ name, postgres_version, region, slug });
         } catch (error) {
           // The control plane rejects provisioning without an active plan as a
           // 400 whose message comes from ensureOrganizationCanProvision
-          // (backend/internal/service/billing.go) — there is no structured
+          // (backend/internal/service/billing.go) - there is no structured
           // error code, so match the stable message text.
           if (
             error instanceof CapyDBApiError &&
@@ -102,7 +108,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
               error.message.includes("organization billing is"))
           ) {
             throw new Error(
-              `No active plan. Ask the user to pick a plan (1 month free) at ${BILLING_URL} — then retry this tool.`,
+              `No active plan. Ask the user to pick a plan (1 month free) at ${BILLING_URL} - then retry this tool.`,
             );
           }
           throw error;
@@ -120,7 +126,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           return {
             project,
             job,
-            note: "Provisioning is still running after 5 minutes — poll with get_job until it completes.",
+            note: "Provisioning is still running after 5 minutes - poll with get_job until it completes.",
           };
         }
         return { project, job };
@@ -158,7 +164,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Get project connection strings",
       description:
         "Get the project's pooled (PgBouncer) and direct Postgres connection URLs. " +
-        "SECRET-BEARING OUTPUT: the URLs embed live database credentials — never log them, echo them into files, or include them in commit messages or chat summaries.",
+        "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries.",
       inputSchema: {
         project_id: z.string().describe("Project id."),
       },
@@ -185,9 +191,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         ttl_hours: z
           .number()
           .int()
-          .positive()
+          .min(1)
+          .max(168)
           .optional()
-          .describe("Time to live in hours before the preview expires."),
+          .describe("Time to live in hours before the preview expires (1-168, default 24)."),
       },
     },
     async ({ project_id, name, mode, ttl_hours }) =>
@@ -240,7 +247,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Extend a preview database's TTL",
       description:
-        "Set a preview database's expiry to ttl_hours from NOW — an absolute new TTL, not a delta added to the remaining time (e.g. ttl_hours 24 makes the preview expire 24 hours from this call, even if it had 3 days left). The preview must be ready and not already expired. Returns the updated preview with its new ttl_expires_at.",
+        "Set a preview database's expiry to ttl_hours from NOW - an absolute new TTL, not a delta added to the remaining time (e.g. ttl_hours 24 makes the preview expire 24 hours from this call, even if it had 3 days left). The preview must be ready and not already expired. Returns the updated preview with its new ttl_expires_at.",
       inputSchema: {
         preview_id: z.string().describe("Preview database id."),
         ttl_hours: z
@@ -262,7 +269,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Get preview database connection strings",
       description:
         "Get a preview database's pooled and direct Postgres connection URLs. " +
-        "SECRET-BEARING OUTPUT: the URLs embed live database credentials — never log them, echo them into files, or include them in commit messages or chat summaries.",
+        "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries.",
       inputSchema: {
         preview_id: z.string().describe("Preview database id."),
       },
@@ -305,7 +312,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Restore into a preview database",
       description:
-        "Restore from a backup (backup_key), a named restore point (restore_point_id), or a PITR timestamp (restore_time) into a preview database — either an existing one (preview_id) or a new one (preview_name; omit both to create an auto-named preview). " +
+        "Restore from a backup (backup_key), a named restore point (restore_point_id), or a PITR timestamp (restore_time) into a preview database - either an existing one (preview_id) or a new one (preview_name; omit both to create an auto-named preview). " +
         "Exactly one source must be given. " +
         "This tool deliberately cannot overwrite the production project database: overwriting production is irreversible and requires explicit human confirmation with the org admin role, so it is only available from the dashboard and CLI. " +
         "Restoring into an existing preview replaces that preview's data.",
@@ -328,9 +335,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         ttl_hours: z
           .number()
           .int()
-          .positive()
+          .min(1)
+          .max(168)
           .optional()
-          .describe("TTL for a newly created preview target."),
+          .describe("TTL for a newly created preview target (1-168 hours, default 24)."),
         allow_unverified_backup: z
           .boolean()
           .optional()
@@ -388,7 +396,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Run an import preflight",
       description:
-        "Synchronously inspect an external source Postgres database (size, server version, installed extensions) and report whether an import into the project is expected to succeed, with per-check pass/warn/fail detail. Does not modify either database. The source URL contains credentials — do not repeat it back.",
+        "Synchronously inspect an external source Postgres database (size, server version, installed extensions) and report whether an import into the project is expected to succeed, with per-check pass/warn/fail detail. Does not modify either database. The source URL contains credentials - do not repeat it back.",
       inputSchema: {
         project_id: z.string().describe("Project id."),
         source_url: z
@@ -409,9 +417,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Import a database",
       description:
         "Import a live external Postgres database into the project from its connection URL. " +
-        "DESTRUCTIVE: the import OVERWRITES the project's production database — existing data not present in the source is lost and cannot be recovered except from backups. " +
+        "DESTRUCTIVE: the import OVERWRITES the project's production database - existing data not present in the source is lost and cannot be recovered except from backups. " +
         "Run import_preflight first, then ask the user before calling this tool; set confirm to true only after the user has explicitly approved overwriting the project database. " +
-        "The import runs asynchronously: poll the returned job with get_job. The source URL contains credentials — do not repeat it back. " +
+        "The import runs asynchronously: poll the returned job with get_job. The source URL contains credentials - do not repeat it back. " +
         "Importing from a dump file is not supported here (it needs the CLI's upload flow: `capydb import --file`).",
       inputSchema: {
         project_id: z.string().describe("Project id."),
@@ -440,8 +448,153 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           ),
         );
       }
-      return run(auth, () => client.createImport(project_id, { source_url, recreate }));
+      // The server now enforces the confirm too; forward the agent's
+      // assertion instead of re-asserting it client-side.
+      return run(auth, () => client.createImport(project_id, { source_url, recreate, confirm }));
     },
+  );
+
+  // ---- Schema & type generation ----------------------------------------------
+
+  server.registerTool(
+    "get_schema",
+    {
+      title: "Get database schema",
+      description:
+        "Return the complete database schema in one call: schemas, tables, views, columns (types, nullability, defaults, identity), primary/foreign/unique keys, enums and installed extensions. " +
+        "Prefer this over introspecting pg_catalog with run_sql - it is one request and the canonical shape. Pass preview_id to introspect a preview database instead of the project database.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        preview_id: z
+          .string()
+          .optional()
+          .describe("Introspect this preview database instead of the project database."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ project_id, preview_id }) =>
+      run(auth, () =>
+        preview_id ? client.getPreviewSchema(preview_id) : client.getProjectSchema(project_id),
+      ),
+    );
+
+  server.registerTool(
+    "generate_types",
+    {
+      title: "Generate types from schema",
+      description:
+        "Generate source code from the live database schema: TypeScript interfaces (language: typescript; style capydb or supabase-compatible), Zod schemas (zod), or a Drizzle ORM schema (drizzle). " +
+        "Returns { filename, content } - write the content to the suggested filename in the user's project. Pass preview_id to generate from a preview database (e.g. a migration branch).",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        language: z
+          .enum(["typescript", "zod", "drizzle"])
+          .optional()
+          .describe("Output language (default typescript)."),
+        style: z
+          .enum(["capydb", "supabase"])
+          .optional()
+          .describe(
+            "TypeScript shape: capydb (per-table interfaces, default) or supabase (a Database generic compatible with supabase-js).",
+          ),
+        preview_id: z
+          .string()
+          .optional()
+          .describe("Generate from this preview database instead of the project database."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ project_id, language, style, preview_id }) =>
+      run(auth, () =>
+        preview_id
+          ? client.generatePreviewSchemaTypes(preview_id, language, style)
+          : client.generateProjectSchemaTypes(project_id, language, style),
+      ),
+    );
+
+  // ---- Restore points (agent safety loop) -------------------------------------
+
+  server.registerTool(
+    "list_restore_points",
+    {
+      title: "List restore points",
+      description:
+        "List the project's named restore points and the PITR window (how many days back point-in-time recovery reaches).",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ project_id }) => run(auth, () => client.listRestorePoints(project_id)),
+  );
+
+  server.registerTool(
+    "create_restore_point",
+    {
+      title: "Create a restore point",
+      description:
+        "Create a named restore point BEFORE a risky change (schema migration, bulk update, destructive SQL) so the pre-change state remains addressable. " +
+        "The safety loop: create_restore_point -> apply the change -> verify -> on failure, use the restore tool with restore_point_id to recover the data into a preview database and repair from there; on success, delete_restore_point. " +
+        "kind backup pins an existing backup_key (create_backup, wait for completion, then find its key with list_backups). kind pitr pins a timestamp and requires PITR eligibility when restored.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        label: z.string().describe('Short label, e.g. "before-orders-migration".'),
+        kind: z
+          .enum(["backup", "pitr"])
+          .describe("backup: pin an existing backup_key. pitr: pin a point-in-time marker."),
+        backup_key: z
+          .string()
+          .optional()
+          .describe(
+            "Recorded backup key. Required when kind is backup; obtain it from list_backups after create_backup completes.",
+          ),
+        note: z.string().optional().describe("Free-form note about why the point was created."),
+        pitr_time: z
+          .string()
+          .optional()
+          .describe("RFC 3339 timestamp to pin when kind is pitr (defaults to now)."),
+      },
+    },
+    async ({ project_id, label, kind, backup_key, note, pitr_time }) =>
+      run(auth, () => {
+        if (kind === "backup" && !backup_key) {
+          throw new Error(
+            "backup_key is required for a backup restore point; run create_backup, wait for completion, then select the recorded key from list_backups",
+          );
+        }
+        if (kind === "pitr" && backup_key) {
+          throw new Error("backup_key is only valid when kind is backup");
+        }
+        if (kind === "backup" && pitr_time) {
+          throw new Error("pitr_time is only valid when kind is pitr");
+        }
+        return client.createRestorePoint(project_id, {
+          backup_key,
+          kind,
+          label,
+          note,
+          pitr_time,
+        });
+      }),
+  );
+
+  server.registerTool(
+    "delete_restore_point",
+    {
+      title: "Delete a restore point",
+      description:
+        "Delete a named restore point after the change it guarded has been verified. The underlying backups follow the normal retention policy.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        restore_point_id: z.string().describe("Restore point id."),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ project_id, restore_point_id }) =>
+      run(auth, async () => {
+        await client.deleteRestorePoint(project_id, restore_point_id);
+        return { deleted: restore_point_id };
+      }),
   );
 
   // ---- Studio (SQL + data browser) ------------------------------------------
@@ -451,7 +604,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Run SQL",
       description:
-        "Execute a SQL statement against the LIVE project database. Intended for read-mostly use (SELECTs, EXPLAIN, lightweight inspection) — DML/DDL is not blocked, so treat writes with the same care as running them in production. Results are capped (default 200 rows, max 1000) and queries time out after 15 seconds. Every execution is recorded in the project's SQL history.",
+        "Execute a SQL statement against the LIVE project database. Intended for read-mostly use (SELECTs, EXPLAIN, lightweight inspection) - DML/DDL is not blocked, so treat writes with the same care as running them in production. Results are capped (default 200 rows, max 1000) and queries time out after 15 seconds. Every execution is recorded in the project's SQL history.",
       inputSchema: {
         project_id: z.string().describe("Project id."),
         query: z.string().describe("SQL statement to execute."),
