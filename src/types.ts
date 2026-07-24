@@ -204,3 +204,23 @@ export interface CreateRestorePointRequest {
   /** PITR target timestamp (RFC 3339) when kind is "pitr". */
   pitr_time?: string;
 }
+
+/**
+ * A Postgres extension offered on the project's database.
+ *
+ * `installed_version` is what the database actually has; `available_version` is
+ * what the platform now provides. They diverge after a platform upgrade until
+ * the customer applies an update, which is what `update_available` signals.
+ * Extensions CapyDB manages for its own observability never report it.
+ */
+export interface ProjectExtension {
+  available_version?: string;
+  default_version?: string;
+  description: string;
+  enabled: boolean;
+  installed_version?: string;
+  name: string;
+  requires_restart?: boolean;
+  trusted: boolean;
+  update_available?: boolean;
+}

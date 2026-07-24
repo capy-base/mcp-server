@@ -21,6 +21,7 @@ import type {
   Job,
   PreviewDatabase,
   Project,
+  ProjectExtension,
   ProjectObservability,
   RegionsResponse,
   RestorePoint,
@@ -210,6 +211,30 @@ export class CapyDBClient {
       `/v1/projects/${encodeURIComponent(projectId)}/backups`,
     );
     return data.backups ?? [];
+  }
+
+  async listProjectExtensions(projectId: string): Promise<ProjectExtension[]> {
+    const data = await this.request<{ extensions: ProjectExtension[] | null }>(
+      "GET",
+      `/v1/projects/${encodeURIComponent(projectId)}/extensions`,
+    );
+    return data.extensions ?? [];
+  }
+
+  async updateProjectExtension(projectId: string, name: string): Promise<Job> {
+    const data = await this.request<{ job: Job }>(
+      "POST",
+      `/v1/projects/${encodeURIComponent(projectId)}/extensions/${encodeURIComponent(name)}/update`,
+    );
+    return data.job;
+  }
+
+  async majorUpgradePreflight(projectId: string, targetMajor: number): Promise<Job> {
+    const data = await this.request<{ job: Job }>(
+      "POST",
+      `/v1/projects/${encodeURIComponent(projectId)}/upgrade/major/preflight?target_major=${targetMajor}`,
+    );
+    return data.job;
   }
 
   async createRestore(projectId: string, body: CreateRestoreRequest): Promise<Job> {

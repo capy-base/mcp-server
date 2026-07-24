@@ -308,6 +308,63 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
   );
 
   server.registerTool(
+    "list_extensions",
+    {
+      title: "List extensions",
+      description:
+        "List the Postgres extensions available on the project's database and whether each is enabled. " +
+        "Reports installed_version (what the database has) against available_version (what the platform now provides); " +
+        "update_available marks the ones a newer build exists for. Extensions CapyDB manages for its own observability " +
+        "never report update_available - those are kept current automatically.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ project_id }) => run(auth, () => client.listProjectExtensions(project_id)),
+  );
+
+  server.registerTool(
+    "update_extension",
+    {
+      title: "Update an extension",
+      description:
+        "Update an already-enabled extension to the version the platform provides (ALTER EXTENSION ... UPDATE). " +
+        "Use list_extensions first and only update where update_available is true. " +
+        "This changes behaviour inside the database's own data - a PostGIS upgrade can require reindexing afterwards - " +
+        "so treat it as a real change and prefer running it against a preview database first. " +
+        "Updating an extension that is already current is a no-op, so retrying is safe. " +
+        "Returns a job; poll it with get_job.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        name: z.string().describe("Extension name, e.g. vector."),
+      },
+    },
+    async ({ project_id, name }) => run(auth, () => client.updateProjectExtension(project_id, name)),
+  );
+
+  server.registerTool(
+    "major_upgrade_preflight",
+    {
+      title: "Check a PostgreSQL major upgrade",
+      description:
+        "Check whether the project's database can move to a given PostgreSQL major, WITHOUT changing anything. " +
+        "Returns a job whose result reports status (upgradable or blocked) plus the specific blockers and warnings - " +
+        "most often an extension with no build for the target major, which would leave the schema referencing types " +
+        "and functions that no longer exist. Safe to run repeatedly. " +
+        "Performing the upgrade itself is not exposed here: it is a migration that needs human scheduling. " +
+        "Poll the returned job with get_job.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        target_major: z.number().int().describe("PostgreSQL major to evaluate, e.g. 18."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ project_id, target_major }) =>
+      run(auth, () => client.majorUpgradePreflight(project_id, target_major)),
+  );
+
+  server.registerTool(
     "restore",
     {
       title: "Restore into a preview database",
