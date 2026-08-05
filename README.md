@@ -96,6 +96,11 @@ For headless/CI, add `"env": { "CAPYDB_API_KEY": "capy_..." }` to the server ent
 | `extend_preview_ttl` | Extend a preview's TTL | mutates TTL only |
 | `get_preview_connection_strings` | Pooled + direct URLs for a preview | **secret-bearing output** |
 | `create_backup` | On-demand backup of the project DB | async job |
+| `list_extensions` | List available Postgres extensions with enablement + update state | read-only |
+| `enable_extension` | Enable an extension (`CREATE EXTENSION IF NOT EXISTS`) | async job; **restarts the database** for `requires_restart` extensions (e.g. `pg_cron`) |
+| `disable_extension` | Disable an extension (`DROP EXTENSION`, no CASCADE) | **destructive**, async job; **restarts the database** for `requires_restart` extensions |
+| `update_extension` | Update an enabled extension to the platform-provided version | async job |
+| `major_upgrade_preflight` | Check whether the DB can move to a PostgreSQL major, without changing anything | read-only, async job |
 | `list_backups` | List backups incl. verification state | read-only |
 | `restore` | Restore a backup / restore point / PITR timestamp **into a preview** | **destructive** to the target preview; cannot overwrite production |
 | `list_restore_points` | List named restore points + the PITR window | read-only |
@@ -109,6 +114,9 @@ For headless/CI, add `"env": { "CAPYDB_API_KEY": "capy_..." }` to the server ent
 | `list_tables` | List tables and views | read-only |
 | `get_table_rows` | Read rows from a table | read-only |
 | `get_observability` | Live metrics: connections, size, active/slow queries, alerts | read-only |
+| `get_logs` | Recent database log entries, with severity filter and tail cursor | read-only |
+| `list_alerts` | Open + recently resolved project alerts (storage, connections, backups, health advisories) | read-only |
+| `acknowledge_alert` | Mark an alert as seen | idempotent; does not resolve the alert |
 | `get_job` | Poll an async job until `completed`/`failed` | read-only |
 | `list_jobs` | List a project's async jobs | read-only |
 

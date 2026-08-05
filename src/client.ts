@@ -21,7 +21,10 @@ import type {
   Job,
   PreviewDatabase,
   Project,
+  ProjectAlert,
+  IndexAdvisorReport,
   ProjectExtension,
+  ProjectLogs,
   ProjectObservability,
   RegionsResponse,
   RestorePoint,
@@ -221,6 +224,23 @@ export class CapyDBClient {
     return data.extensions ?? [];
   }
 
+  async enableProjectExtension(projectId: string, name: string): Promise<Job> {
+    const data = await this.request<{ job: Job }>(
+      "POST",
+      `/v1/projects/${encodeURIComponent(projectId)}/extensions`,
+      { body: { name } },
+    );
+    return data.job;
+  }
+
+  async disableProjectExtension(projectId: string, name: string): Promise<Job> {
+    const data = await this.request<{ job: Job }>(
+      "DELETE",
+      `/v1/projects/${encodeURIComponent(projectId)}/extensions/${encodeURIComponent(name)}`,
+    );
+    return data.job;
+  }
+
   async updateProjectExtension(projectId: string, name: string): Promise<Job> {
     const data = await this.request<{ job: Job }>(
       "POST",
@@ -305,6 +325,66 @@ export class CapyDBClient {
       `/v1/projects/${encodeURIComponent(projectId)}/observability`,
     );
     return data.observability;
+  }
+
+  /**
+   * Index suggestions derived from the predicates the project's queries actually ran. Read-only:
+   * candidates are costed as hypothetical indexes, so nothing is created on the database.
+   */
+  async getIndexAdvisor(
+    projectId: string,
+    options: { minFilter?: number; minSelectivity?: number } = {},
+  ): Promise<IndexAdvisorReport> {
+    const params = new URLSearchParams();
+    if (options.minFilter !== undefined) params.set("min_filter", String(options.minFilter));
+    if (options.minSelectivity !== undefined) {
+      params.set("min_selectivity", String(options.minSelectivity));
+    }
+    const query = params.size > 0 ? `?${params.toString()}` : "";
+    const data = await this.request<{ advisor: IndexAdvisorReport }>(
+      "GET",
+      `/v1/projects/${encodeURIComponent(projectId)}/advisor/indexes${query}`,
+    );
+    return {
+      ...data.advisor,
+      missing_extensions: data.advisor.missing_extensions ?? [],
+      suggestions: data.advisor.suggestions ?? [],
+    };
+  }
+
+  async getProjectLogs(
+    projectId: string,
+    options: { hours?: number; severity?: string; limit?: number; cursor?: string } = {},
+  ): Promise<ProjectLogs> {
+    const data = await this.request<{ logs: ProjectLogs }>(
+      "GET",
+      `/v1/projects/${encodeURIComponent(projectId)}/logs`,
+      {
+        query: {
+          hours: options.hours,
+          severity: options.severity,
+          limit: options.limit,
+          cursor: options.cursor,
+        },
+      },
+    );
+    return { ...data.logs, entries: data.logs.entries ?? [] };
+  }
+
+  async listProjectAlerts(projectId: string): Promise<ProjectAlert[]> {
+    const data = await this.request<{ alerts: ProjectAlert[] | null }>(
+      "GET",
+      `/v1/projects/${encodeURIComponent(projectId)}/alerts`,
+    );
+    return data.alerts ?? [];
+  }
+
+  async acknowledgeProjectAlert(projectId: string, alertId: string): Promise<ProjectAlert> {
+    const data = await this.request<{ alert: ProjectAlert }>(
+      "POST",
+      `/v1/projects/${encodeURIComponent(projectId)}/alerts/${encodeURIComponent(alertId)}/acknowledge`,
+    );
+    return data.alert;
   }
 
   async getJob(jobId: string): Promise<Job> {

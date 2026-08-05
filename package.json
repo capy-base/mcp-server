@@ -1,6 +1,6 @@
 {
   "name": "@capydb/mcp",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Official CapyDB MCP server - managed Postgres projects, preview databases, backups, restores, and SQL for AI agents.",
   "keywords": [
     "capydb",
@@ -28,23 +28,24 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
     "format": "oxfmt --write src",
-    "prepublishOnly": "pnpm typecheck && pnpm build"
+    "format:check": "oxfmt --check src",
+    "prepublishOnly": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
   },
   "dependencies": {
-    "@capydb/sdk": "^1.1.8",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@capydb/sdk": "^1.2.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
-    "oxfmt": "0.60.0",
-    "oxlint": "1.75.0",
+    "@types/node": "^26.1.2",
+    "oxfmt": "0.62.0",
+    "oxlint": "1.77.0",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2"
   },
-  "packageManager": "pnpm@11.17.0",
+  "packageManager": "pnpm@11.20.0",
   "engines": {
-    "node": ">=24"
+    "node": ">=24.19.0"
   },
   "publishConfig": {
     "access": "public"

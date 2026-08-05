@@ -315,13 +315,103 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "List the Postgres extensions available on the project's database and whether each is enabled. " +
         "Reports installed_version (what the database has) against available_version (what the platform now provides); " +
         "update_available marks the ones a newer build exists for. Extensions CapyDB manages for its own observability " +
-        "never report update_available - those are kept current automatically.",
+        "never report update_available - those are kept current automatically. " +
+        "Each entry carries a category (core, ai, search, performance, security, analytics, geospatial, scheduling, devtools) " +
+        "and requires_restart, which is true for extensions that load a shared library and therefore restart the database.",
       inputSchema: {
         project_id: z.string().describe("Project id."),
       },
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.listProjectExtensions(project_id)),
+  );
+
+  server.registerTool(
+    "suggest_indexes",
+    {
+      title: "Suggest indexes",
+      description:
+        "Suggest indexes for the project's database based on the predicates its queries actually ran. " +
+        "READ-ONLY AND SAFE ON PRODUCTION: each candidate is measured by building it as a HYPOTHETICAL index " +
+        "(it exists only in the planner's memory for one connection) purely to estimate its size - no index is created " +
+        "and nothing is written. " +
+        "Returns available=false when the required extensions are missing, with missing_extensions naming what to enable " +
+        "(pg_qualstats collects the evidence; hypopg adds size estimates). Enabling pg_qualstats RESTARTS the database, " +
+        "so get the user's go-ahead first. " +
+        "Suggestions only appear after the database has served enough traffic for a predicate to cross the thresholds - " +
+        "an empty list on a quiet database is expected, and min_filter can be lowered to widen the search. " +
+        "DO NOT create these indexes without asking: CREATE INDEX locks writes on the table while it builds, " +
+        "and CREATE INDEX CONCURRENTLY should be used on large tables.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        min_filter: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "Minimum average rows a predicate must filter to be considered (default 1000). Lower it on a quiet database.",
+          ),
+        min_selectivity: z
+          .number()
+          .int()
+          .positive()
+          .max(100)
+          .optional()
+          .describe(
+            "Minimum average selectivity percentage for a predicate to be considered (default 30).",
+          ),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ project_id, min_filter, min_selectivity }) =>
+      run(auth, () =>
+        client.getIndexAdvisor(project_id, {
+          minFilter: min_filter,
+          minSelectivity: min_selectivity,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "enable_extension",
+    {
+      title: "Enable an extension",
+      description:
+        "Enable a Postgres extension on the project's database (CREATE EXTENSION IF NOT EXISTS). " +
+        "The extension must appear in list_extensions and not already be enabled. " +
+        "RESTART WARNING: extensions that load a shared library (requires_restart true in list_extensions: pg_cron, pgaudit, pg_qualstats) " +
+        "RESTART THE DATABASE when enabled - open connections drop for a few seconds - so check list_extensions first " +
+        "and get the user's go-ahead before enabling one of those. " +
+        "Runs asynchronously: poll the returned job with get_job.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        name: z.string().describe("Extension name from list_extensions, e.g. postgis."),
+      },
+    },
+    async ({ project_id, name }) =>
+      run(auth, () => client.enableProjectExtension(project_id, name)),
+  );
+
+  server.registerTool(
+    "disable_extension",
+    {
+      title: "Disable an extension",
+      description:
+        "Disable a Postgres extension on the project's database (DROP EXTENSION, without CASCADE). " +
+        "The extension's own objects (types, functions, operators) are removed; if anything else still depends on them, " +
+        "the job fails with the dependency error instead of dropping dependents. " +
+        "RESTART WARNING: like enabling, disabling a shared-library extension (requires_restart true in list_extensions) " +
+        "RESTARTS THE DATABASE with a brief interruption to open connections. " +
+        "Runs asynchronously: poll the returned job with get_job.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        name: z.string().describe("Extension name, e.g. postgis."),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ project_id, name }) =>
+      run(auth, () => client.disableProjectExtension(project_id, name)),
   );
 
   server.registerTool(
@@ -340,7 +430,8 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         name: z.string().describe("Extension name, e.g. vector."),
       },
     },
-    async ({ project_id, name }) => run(auth, () => client.updateProjectExtension(project_id, name)),
+    async ({ project_id, name }) =>
+      run(auth, () => client.updateProjectExtension(project_id, name)),
   );
 
   server.registerTool(
@@ -533,7 +624,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       run(auth, () =>
         preview_id ? client.getPreviewSchema(preview_id) : client.getProjectSchema(project_id),
       ),
-    );
+  );
 
   server.registerTool(
     "generate_types",
@@ -567,7 +658,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           ? client.generatePreviewSchemaTypes(preview_id, language, style)
           : client.generateProjectSchemaTypes(project_id, language, style),
       ),
-    );
+  );
 
   // ---- Restore points (agent safety loop) -------------------------------------
 
@@ -661,7 +752,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Run SQL",
       description:
-        "Execute a SQL statement against the LIVE project database. Intended for read-mostly use (SELECTs, EXPLAIN, lightweight inspection) - DML/DDL is not blocked, so treat writes with the same care as running them in production. Results are capped (default 200 rows, max 1000) and queries time out after 15 seconds. Every execution is recorded in the project's SQL history.",
+        "Execute a SQL statement against the LIVE project database. Intended for read-mostly use (SELECTs, EXPLAIN, lightweight inspection) - DML/DDL is not blocked, so treat writes with the same care as running them in production. " +
+        "BEFORE any UPDATE or DELETE, check the WHERE clause actually scopes the rows you mean: an unqualified or too-broad statement silently rewrites every row, and the original values are not recoverable from the table afterwards. " +
+        "For anything destructive, call create_restore_point FIRST - that is what makes the change reversible, and reconstructing overwritten values from a related table afterwards is lossy (it recovers the rows, not necessarily the exact per-column history). " +
+        "Prefer running the statement against a preview database first. Results are capped (default 200 rows, max 1000) and queries time out after 15 seconds. Every execution is recorded in the project's SQL history.",
       inputSchema: {
         project_id: z.string().describe("Project id."),
         query: z.string().describe("SQL statement to execute."),
@@ -725,11 +819,89 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
   );
 
   server.registerTool(
+    "get_logs",
+    {
+      title: "Get database logs",
+      description:
+        "Get recent Postgres log entries for the project database, ascending by time. " +
+        "Severity is parsed from the Postgres log format; continuation lines (STATEMENT/DETAIL/HINT/CONTEXT) report " +
+        'severity "detail". Works for paused databases too - logs outlive the process; retention is typically several days. ' +
+        "To keep tailing, pass the returned next_cursor as cursor on the next call (cursor takes precedence over hours; " +
+        "when next_cursor is absent, nothing new arrived - reuse the previous cursor).",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        hours: z
+          .number()
+          .int()
+          .min(1)
+          .max(168)
+          .optional()
+          .describe("Trailing window in hours (1-168, default 1). Ignored when cursor is set."),
+        severity: z
+          .string()
+          .optional()
+          .describe(
+            "Comma-separated severity filter (debug, log, info, notice, warning, error, fatal, panic, detail). Omit for all severities.",
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe("Maximum entries returned (1-500, default 200). The newest entries are kept."),
+        cursor: z
+          .string()
+          .optional()
+          .describe("Resume strictly after a previously returned entry's cursor (tail mode)."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ project_id, hours, severity, limit, cursor }) =>
+      run(auth, () => client.getProjectLogs(project_id, { hours, severity, limit, cursor })),
+  );
+
+  server.registerTool(
+    "list_alerts",
+    {
+      title: "List project alerts",
+      description:
+        "List the project's open alerts plus alerts resolved within the last 30 days, newest first. " +
+        "Covers threshold alerts on storage and connection usage against the plan limits, backup failure/staleness alerts, " +
+        "and warning-severity health advisories (cache_hit, blocked_queries, deadlocks, vacuum) derived from the periodic " +
+        "metrics sweep. An alert is open while resolved_at is absent; it resolves on its own when the condition clears.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ project_id }) => run(auth, () => client.listProjectAlerts(project_id)),
+  );
+
+  server.registerTool(
+    "acknowledge_alert",
+    {
+      title: "Acknowledge a project alert",
+      description:
+        "Record that the user has seen an alert (see list_alerts). Idempotent: the first acknowledgement time is kept. " +
+        "Acknowledging does not resolve the alert - it resolves on its own when the underlying condition clears - " +
+        "so also address the cause (free storage, reduce connections, retry the backup) rather than only acknowledging.",
+      inputSchema: {
+        project_id: z.string().describe("Project id."),
+        alert_id: z.string().describe("Alert id from list_alerts."),
+      },
+      annotations: { idempotentHint: true },
+    },
+    async ({ project_id, alert_id }) =>
+      run(auth, () => client.acknowledgeProjectAlert(project_id, alert_id)),
+  );
+
+  server.registerTool(
     "get_job",
     {
       title: "Get a job",
       description:
-        'Get a single asynchronous job. Poll until state is "completed" or "failed". Use this after create_preview_database, create_backup, restore, import_database, reset_preview_database, or delete_preview_database.',
+        'Get a single asynchronous job. Poll until state is "completed" or "failed". Use this after create_preview_database, create_backup, restore, import_database, reset_preview_database, delete_preview_database, enable_extension, disable_extension, or update_extension.',
       inputSchema: {
         job_id: z.string().describe("Job id."),
       },
