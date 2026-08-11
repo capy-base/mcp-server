@@ -138,6 +138,13 @@ export interface SchemaColumn {
   /** Formatted pg type, e.g. `character varying(255)`. */
   data_type: string;
   default?: string;
+  /**
+   * Storage kind for generated columns. Virtual generated columns exist only on
+   * Postgres 18+, where VIRTUAL is the default for GENERATED ALWAYS AS; on
+   * 16/17 every generated column is stored. Virtual columns are computed on
+   * read, occupy no storage, and cannot be indexed.
+   */
+  generated?: "stored" | "virtual";
   /** Set for identity columns. */
   identity?: "always" | "by_default";
   is_array: boolean;

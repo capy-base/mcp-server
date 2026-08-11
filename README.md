@@ -7,6 +7,8 @@ Every CapyDB project runs in its own isolated database cell - a dedicated Postgr
 reached with normal connection strings.
 
 Runs over stdio and talks to the CapyDB control plane API - no local database access required.
+Serves both the `2026-07-28` protocol revision and the 2025-era revisions, so it works with
+current hosts and with clients that have not adopted the new revision yet.
 
 ## Install
 

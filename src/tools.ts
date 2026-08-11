@@ -10,8 +10,7 @@
  * - Results are returned as pretty-printed JSON text.
  */
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { sleep, type AuthManager } from "./auth.js";
@@ -62,7 +61,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "List regions",
       description:
         "List the regions a CapyDB Postgres project can be placed in. Use this to pick a region for create_project; omit the region to let CapyDB choose.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => run(auth, () => client.listRegions()),
@@ -76,7 +75,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Create a project",
       description:
         "Create a new CapyDB Postgres project. Provisioning is asynchronous; this tool waits up to 5 minutes for the provision job to finish and returns the final project and job state. The project's plan is derived from the organization's billing state and cannot be chosen here. Omit the region to let CapyDB pick (use list_regions to see what is available).",
-      inputSchema: {
+      inputSchema: z.object({
         name: z.string().describe("Project name."),
         postgres_version: z
           .enum(["16", "17", "18"])
@@ -89,7 +88,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .optional()
           .describe("Region to place the project in (see list_regions). Omit to let CapyDB pick."),
         slug: z.string().optional().describe("URL-safe slug; derived from the name when omitted."),
-      },
+      }),
     },
     async ({ name, postgres_version, region, slug }) =>
       run(auth, async () => {
@@ -139,7 +138,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "List projects",
       description:
         "List the CapyDB Postgres projects visible to the configured API key, including state, plan, region, and storage limits.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => run(auth, () => client.listProjects()),
@@ -150,9 +149,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Get a project",
       description: "Get a single CapyDB project by id, including provisioning state and limits.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.getProject(project_id)),
@@ -165,9 +164,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       description:
         "Get the project's pooled (PgBouncer) and direct Postgres connection URLs. " +
         "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.getProjectConnections(project_id)),
@@ -181,7 +180,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Create a preview database",
       description:
         'Create a disposable preview/branch database for a project. Provisioning is asynchronous: poll the returned job with get_job until it completes. Mode "empty" creates a blank database; "clone" copies the production data. Previews expire after their TTL.',
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         name: z.string().optional().describe("Preview name (e.g. a branch or PR slug)."),
         mode: z
@@ -195,7 +194,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .max(168)
           .optional()
           .describe("Time to live in hours before the preview expires (1-168, default 24)."),
-      },
+      }),
     },
     async ({ project_id, name, mode, ttl_hours }) =>
       run(auth, () => client.createPreviewDatabase(project_id, { name, mode, ttl_hours })),
@@ -206,9 +205,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "List preview databases",
       description: "List a project's preview databases with state, source, and TTL expiry.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.listPreviewDatabases(project_id)),
@@ -220,9 +219,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Delete a preview database",
       description:
         "Permanently delete a preview database and its role. The data is not recoverable. Deletion runs asynchronously via the returned job.",
-      inputSchema: {
+      inputSchema: z.object({
         preview_id: z.string().describe("Preview database id."),
-      },
+      }),
       annotations: { destructiveHint: true, idempotentHint: true },
     },
     async ({ preview_id }) => run(auth, () => client.deletePreviewDatabase(preview_id)),
@@ -234,9 +233,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Reset a preview database",
       description:
         'Reset a preview database back to its source state: "clone" previews are re-cloned from the current production data, "empty" previews are wiped clean. The preview keeps its name and connection route, but its CURRENT DATA IS LOST. The reset runs asynchronously: poll the returned job with get_job.',
-      inputSchema: {
+      inputSchema: z.object({
         preview_id: z.string().describe("Preview database id."),
-      },
+      }),
       annotations: { destructiveHint: true },
     },
     async ({ preview_id }) => run(auth, () => client.resetPreviewDatabase(preview_id)),
@@ -248,7 +247,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Extend a preview database's TTL",
       description:
         "Set a preview database's expiry to ttl_hours from NOW - an absolute new TTL, not a delta added to the remaining time (e.g. ttl_hours 24 makes the preview expire 24 hours from this call, even if it had 3 days left). The preview must be ready and not already expired. Returns the updated preview with its new ttl_expires_at.",
-      inputSchema: {
+      inputSchema: z.object({
         preview_id: z.string().describe("Preview database id."),
         ttl_hours: z
           .number()
@@ -256,7 +255,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .min(1)
           .max(168)
           .describe("New TTL in hours, measured from now (1-168)."),
-      },
+      }),
       annotations: { idempotentHint: true },
     },
     async ({ preview_id, ttl_hours }) =>
@@ -270,9 +269,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       description:
         "Get a preview database's pooled and direct Postgres connection URLs. " +
         "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries.",
-      inputSchema: {
+      inputSchema: z.object({
         preview_id: z.string().describe("Preview database id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ preview_id }) => run(auth, () => client.getPreviewConnections(preview_id)),
@@ -286,10 +285,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Create a backup",
       description:
         "Enqueue an on-demand backup of the project database. Runs asynchronously: poll the returned job with get_job.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         label: z.string().optional().describe("Optional human-readable label for the backup."),
-      },
+      }),
     },
     async ({ project_id, label }) => run(auth, () => client.createBackup(project_id, label)),
   );
@@ -299,9 +298,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "List backups",
       description: "List a project's completed backups, including verification state.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.listBackups(project_id)),
@@ -318,9 +317,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "never report update_available - those are kept current automatically. " +
         "Each entry carries a category (core, ai, search, performance, security, analytics, geospatial, scheduling, devtools) " +
         "and requires_restart, which is true for extensions that load a shared library and therefore restart the database.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.listProjectExtensions(project_id)),
@@ -342,7 +341,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "an empty list on a quiet database is expected, and min_filter can be lowered to widen the search. " +
         "DO NOT create these indexes without asking: CREATE INDEX locks writes on the table while it builds, " +
         "and CREATE INDEX CONCURRENTLY should be used on large tables.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         min_filter: z
           .number()
@@ -361,7 +360,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .describe(
             "Minimum average selectivity percentage for a predicate to be considered (default 30).",
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id, min_filter, min_selectivity }) =>
@@ -384,10 +383,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "RESTART THE DATABASE when enabled - open connections drop for a few seconds - so check list_extensions first " +
         "and get the user's go-ahead before enabling one of those. " +
         "Runs asynchronously: poll the returned job with get_job.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         name: z.string().describe("Extension name from list_extensions, e.g. postgis."),
-      },
+      }),
     },
     async ({ project_id, name }) =>
       run(auth, () => client.enableProjectExtension(project_id, name)),
@@ -404,10 +403,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "RESTART WARNING: like enabling, disabling a shared-library extension (requires_restart true in list_extensions) " +
         "RESTARTS THE DATABASE with a brief interruption to open connections. " +
         "Runs asynchronously: poll the returned job with get_job.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         name: z.string().describe("Extension name, e.g. postgis."),
-      },
+      }),
       annotations: { destructiveHint: true },
     },
     async ({ project_id, name }) =>
@@ -425,10 +424,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "so treat it as a real change and prefer running it against a preview database first. " +
         "Updating an extension that is already current is a no-op, so retrying is safe. " +
         "Returns a job; poll it with get_job.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         name: z.string().describe("Extension name, e.g. vector."),
-      },
+      }),
     },
     async ({ project_id, name }) =>
       run(auth, () => client.updateProjectExtension(project_id, name)),
@@ -445,10 +444,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "and functions that no longer exist. Safe to run repeatedly. " +
         "Performing the upgrade itself is not exposed here: it is a migration that needs human scheduling. " +
         "Poll the returned job with get_job.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         target_major: z.number().int().describe("PostgreSQL major to evaluate, e.g. 18."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id, target_major }) =>
@@ -464,7 +463,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "Exactly one source must be given. " +
         "This tool deliberately cannot overwrite the production project database: overwriting production is irreversible and requires explicit human confirmation with the org admin role, so it is only available from the dashboard and CLI. " +
         "Restoring into an existing preview replaces that preview's data.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         backup_key: z.string().optional().describe("Backup to restore from."),
         restore_point_id: z.string().optional().describe("Named restore point to restore from."),
@@ -491,7 +490,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .boolean()
           .optional()
           .describe("Permit restoring from a backup whose verification has not passed."),
-      },
+      }),
       annotations: { destructiveHint: true },
     },
     async ({
@@ -545,14 +544,14 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Run an import preflight",
       description:
         "Synchronously inspect an external source Postgres database (size, server version, installed extensions) and report whether an import into the project is expected to succeed, with per-check pass/warn/fail detail. Does not modify either database. The source URL contains credentials - do not repeat it back.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         source_url: z
           .string()
           .describe(
             "Postgres connection URL of the source database (postgres://user:pass@host:port/db). Must be a direct or session-mode endpoint: transaction-pooler URLs (Neon '-pooler' hostnames, Supabase port 6543) are rejected. Supabase sources get their platform-managed schemas (auth/storage/realtime/…) excluded automatically.",
           ),
-      },
+      }),
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ project_id, source_url }) =>
@@ -569,7 +568,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "Run import_preflight first, then ask the user before calling this tool; set confirm to true only after the user has explicitly approved overwriting the project database. " +
         "The import runs asynchronously: poll the returned job with get_job. The source URL contains credentials - do not repeat it back. " +
         "Importing from a dump file is not supported here (it needs the CLI's upload flow: `capydb import --file`).",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         source_url: z
           .string()
@@ -585,7 +584,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .describe(
             "Must be true. Confirms the user explicitly approved overwriting the project's database with the imported data.",
           ),
-      },
+      }),
       annotations: { destructiveHint: true, openWorldHint: true },
     },
     async ({ project_id, source_url, recreate, confirm }) => {
@@ -611,13 +610,13 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       description:
         "Return the complete database schema in one call: schemas, tables, views, columns (types, nullability, defaults, identity), primary/foreign/unique keys, enums and installed extensions. " +
         "Prefer this over introspecting pg_catalog with run_sql - it is one request and the canonical shape. Pass preview_id to introspect a preview database instead of the project database.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         preview_id: z
           .string()
           .optional()
           .describe("Introspect this preview database instead of the project database."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id, preview_id }) =>
@@ -633,7 +632,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       description:
         "Generate source code from the live database schema: TypeScript interfaces (language: typescript; style capydb or supabase-compatible), Zod schemas (zod), or a Drizzle ORM schema (drizzle). " +
         "Returns { filename, content } - write the content to the suggested filename in the user's project. Pass preview_id to generate from a preview database (e.g. a migration branch).",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         language: z
           .enum(["typescript", "zod", "drizzle"])
@@ -649,7 +648,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .string()
           .optional()
           .describe("Generate from this preview database instead of the project database."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id, language, style, preview_id }) =>
@@ -668,9 +667,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "List restore points",
       description:
         "List the project's named restore points and the PITR window (how many days back point-in-time recovery reaches).",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.listRestorePoints(project_id)),
@@ -684,7 +683,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "Create a named restore point BEFORE a risky change (schema migration, bulk update, destructive SQL) so the pre-change state remains addressable. " +
         "The safety loop: create_restore_point -> apply the change -> verify -> on failure, use the restore tool with restore_point_id to recover the data into a preview database and repair from there; on success, delete_restore_point. " +
         "kind backup pins an existing backup_key (create_backup, wait for completion, then find its key with list_backups). kind pitr pins a timestamp and requires PITR eligibility when restored.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         label: z.string().describe('Short label, e.g. "before-orders-migration".'),
         kind: z
@@ -701,7 +700,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .string()
           .optional()
           .describe("RFC 3339 timestamp to pin when kind is pitr (defaults to now)."),
-      },
+      }),
     },
     async ({ project_id, label, kind, backup_key, note, pitr_time }) =>
       run(auth, () => {
@@ -732,10 +731,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Delete a restore point",
       description:
         "Delete a named restore point after the change it guarded has been verified. The underlying backups follow the normal retention policy.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         restore_point_id: z.string().describe("Restore point id."),
-      },
+      }),
       annotations: { destructiveHint: true },
     },
     async ({ project_id, restore_point_id }) =>
@@ -756,7 +755,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "BEFORE any UPDATE or DELETE, check the WHERE clause actually scopes the rows you mean: an unqualified or too-broad statement silently rewrites every row, and the original values are not recoverable from the table afterwards. " +
         "For anything destructive, call create_restore_point FIRST - that is what makes the change reversible, and reconstructing overwritten values from a related table afterwards is lossy (it recovers the rows, not necessarily the exact per-column history). " +
         "Prefer running the statement against a preview database first. Results are capped (default 200 rows, max 1000) and queries time out after 15 seconds. Every execution is recorded in the project's SQL history.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         query: z.string().describe("SQL statement to execute."),
         max_rows: z
@@ -766,7 +765,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .max(1000)
           .optional()
           .describe("Row cap for the result (default 200, max 1000)."),
-      },
+      }),
     },
     async ({ project_id, query, max_rows }) =>
       run(auth, () => client.runSql(project_id, { query, max_rows })),
@@ -777,9 +776,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "List tables",
       description: "List tables and views in the project database.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.listTables(project_id)),
@@ -790,12 +789,12 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "Get table rows",
       description: "Return rows from a table in the project database.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         schema: z.string().describe('Schema name (e.g. "public").'),
         table: z.string().describe("Table name."),
         limit: z.number().int().positive().optional().describe("Maximum number of rows to return."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id, schema, table, limit }) =>
@@ -810,9 +809,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Get live project metrics",
       description:
         "Get a live observability snapshot of the project database: connection usage, database size versus storage limit, active queries, slowest statements (when pg_stat_statements is available), and derived alerts.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.getObservability(project_id)),
@@ -828,7 +827,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         'severity "detail". Works for paused databases too - logs outlive the process; retention is typically several days. ' +
         "To keep tailing, pass the returned next_cursor as cursor on the next call (cursor takes precedence over hours; " +
         "when next_cursor is absent, nothing new arrived - reuse the previous cursor).",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         hours: z
           .number()
@@ -854,7 +853,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .string()
           .optional()
           .describe("Resume strictly after a previously returned entry's cursor (tail mode)."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id, hours, severity, limit, cursor }) =>
@@ -870,9 +869,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "Covers threshold alerts on storage and connection usage against the plan limits, backup failure/staleness alerts, " +
         "and warning-severity health advisories (cache_hit, blocked_queries, deadlocks, vacuum) derived from the periodic " +
         "metrics sweep. An alert is open while resolved_at is absent; it resolves on its own when the condition clears.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id }) => run(auth, () => client.listProjectAlerts(project_id)),
@@ -886,10 +885,10 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
         "Record that the user has seen an alert (see list_alerts). Idempotent: the first acknowledgement time is kept. " +
         "Acknowledging does not resolve the alert - it resolves on its own when the underlying condition clears - " +
         "so also address the cause (free storage, reduce connections, retry the backup) rather than only acknowledging.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         alert_id: z.string().describe("Alert id from list_alerts."),
-      },
+      }),
       annotations: { idempotentHint: true },
     },
     async ({ project_id, alert_id }) =>
@@ -902,9 +901,9 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Get a job",
       description:
         'Get a single asynchronous job. Poll until state is "completed" or "failed". Use this after create_preview_database, create_backup, restore, import_database, reset_preview_database, delete_preview_database, enable_extension, disable_extension, or update_extension.',
-      inputSchema: {
+      inputSchema: z.object({
         job_id: z.string().describe("Job id."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ job_id }) => run(auth, () => client.getJob(job_id)),
@@ -915,7 +914,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
     {
       title: "List project jobs",
       description: "List a project's asynchronous jobs, newest first.",
-      inputSchema: {
+      inputSchema: z.object({
         project_id: z.string().describe("Project id."),
         limit: z
           .number()
@@ -923,7 +922,7 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
           .positive()
           .optional()
           .describe("Maximum number of jobs to return (default 25)."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ project_id, limit }) => run(auth, () => client.listJobs(project_id, limit)),

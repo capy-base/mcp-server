@@ -20,8 +20,8 @@
  *                    from CAPYDB_API_URL when unset.
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
 import { AuthManager } from "./auth.js";
 import { CapyDBClient } from "./client.js";
@@ -30,18 +30,34 @@ import { registerTools } from "./tools.js";
 const SERVER_VERSION = "0.2.0";
 
 async function main(): Promise<void> {
+  // Auth and the API client are process-scoped, not per-connection: AuthManager
+  // caches the resolved credential (and any key minted by the device login), and
+  // the factory below can run more than once per process - once for the pinned
+  // connection, plus once for a discarded `server/discover` probe.
   const auth = await AuthManager.create();
   const client = new CapyDBClient({ getApiKey: () => auth.apiKey(), baseUrl: auth.apiUrl });
 
-  const server = new McpServer({
-    name: "capydb",
-    title: "CapyDB",
-    version: SERVER_VERSION,
-  });
-  registerTools(server, client, auth);
+  // `serveStdio` owns the transport and picks the protocol era from the opening
+  // exchange: `server/discover` pins the connection to 2026-07-28, an
+  // `initialize` handshake pins it to the 2025 era. Both are served from this
+  // one factory, so hosts that predate the 2026 revision keep working - do not
+  // pass `legacy: 'reject'`.
+  serveStdio(
+    () => {
+      const server = new McpServer({
+        name: "capydb",
+        title: "CapyDB",
+        version: SERVER_VERSION,
+      });
+      registerTools(server, client, auth);
+      return server;
+    },
+    {
+      // Out-of-band transport errors would otherwise be swallowed.
+      onerror: (error) => console.error("capydb-mcp: transport error:", error.message),
+    },
+  );
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
   // stdout is the MCP transport; diagnostics must go to stderr.
   console.error(
     `capydb-mcp v${SERVER_VERSION} ready (API: ${auth.apiUrl}, auth: ${auth.describe()})`,
