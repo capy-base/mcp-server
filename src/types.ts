@@ -47,13 +47,13 @@ export interface CreateProjectRequest {
   slug?: string;
 }
 
-/** Response from `GET /v1/regions` — the regions a project can be placed in. */
+/** Response from `GET /v1/regions` - the regions a project can be placed in. */
 export interface RegionsResponse {
   regions: string[];
 }
 
 export interface ConnectionInfo {
-  /** Pooled (PgBouncer) connection URL — the default for applications. */
+  /** Pooled (PgBouncer) connection URL - the default for applications. */
   pooled_url?: string;
   /** Direct Postgres connection URL (for migrations and long-lived sessions). */
   direct_url?: string;
@@ -78,7 +78,7 @@ export interface SQLQueryRequest {
 export interface CreateImportRequest {
   /**
    * Live Postgres connection URL to import from. The dump-upload variant
-   * (upload_key) is intentionally not exposed over MCP — it needs the
+   * (upload_key) is intentionally not exposed over MCP - it needs the
    * presigned-upload flow only the CLI and dashboard implement.
    */
   source_url: string;
@@ -269,7 +269,7 @@ export interface ProjectLogEntry {
 
 /**
  * One log fetch: entries ascending by time plus the cursor to resume a tail
- * from. `next_cursor` is absent when the fetch returned nothing — keep
+ * from. `next_cursor` is absent when the fetch returned nothing - keep
  * tailing with the previous cursor.
  */
 export interface ProjectLogs {
