@@ -29,10 +29,11 @@
     "lint": "oxlint src",
     "format": "oxfmt --write src",
     "format:check": "oxfmt --check src",
-    "prepublishOnly": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
+    "prepublishOnly": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
+    "release": "release-kit"
   },
   "dependencies": {
-    "@capydb/sdk": "^1.4.1",
+    "@capydb/sdk": "^1.4.3",
     "@modelcontextprotocol/server": "^2.0.0",
     "zod": "^4.4.3"
   },
@@ -41,9 +42,9 @@
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
     "tsdown": "^0.22.14",
-    "typescript": "^7.0.2"
+    "typescript": "next"
   },
-  "packageManager": "pnpm@11.21.0",
+  "packageManager": "pnpm@11.22.0",
   "engines": {
     "node": ">=24.19.0"
   },

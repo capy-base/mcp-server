@@ -163,7 +163,8 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Get project connection strings",
       description:
         "Get the project's pooled (PgBouncer) and direct Postgres connection URLs. " +
-        "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries.",
+        "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries. " +
+        "When passing a URL to psql or another libpq tool, append &sslrootcert=system (libpq 16+; libpq does not read the OS trust store by default). App drivers (node-postgres, postgres.js, pgx, JDBC) need no change.",
       inputSchema: z.object({
         project_id: z.string().describe("Project id."),
       }),
@@ -268,7 +269,8 @@ export function registerTools(server: McpServer, client: CapyDBClient, auth: Aut
       title: "Get preview database connection strings",
       description:
         "Get a preview database's pooled and direct Postgres connection URLs. " +
-        "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries.",
+        "SECRET-BEARING OUTPUT: the URLs embed live database credentials - never log them, echo them into files, or include them in commit messages or chat summaries. " +
+        "When passing a URL to psql or another libpq tool, append &sslrootcert=system (libpq 16+; libpq does not read the OS trust store by default). App drivers (node-postgres, postgres.js, pgx, JDBC) need no change.",
       inputSchema: z.object({
         preview_id: z.string().describe("Preview database id."),
       }),
