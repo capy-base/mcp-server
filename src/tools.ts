@@ -19,7 +19,7 @@ import type { Job, Project } from "./types.js";
 
 const PROVISION_POLL_INTERVAL_MS = 3_000;
 const PROVISION_TIMEOUT_MS = 5 * 60_000;
-const BILLING_URL = "https://capydb.dev/dashboard/settings?tab=billing";
+const BILLING_URL = "https://capydb.dev/dashboard/settings/billing";
 
 function jsonResult(value: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };

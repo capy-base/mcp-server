@@ -124,7 +124,7 @@ For headless/CI, add `"env": { "CAPYDB_API_KEY": "capy_..." }` to the server ent
 
 `create_project` notes: the project's plan is derived from the organization's billing state and cannot
 be chosen per project. If the organization has no active plan, the tool fails with a link to
-`https://capydb.dev/dashboard/settings?tab=billing` (1 month free) so the user can pick one and retry.
+`https://capydb.dev/dashboard/settings/billing` (1 month free) so the user can pick one and retry.
 
 ### Safety model
 
